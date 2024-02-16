@@ -99,6 +99,9 @@ public:
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Velodyne")
   int32 PositionPort;
 
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Velodyne")
+  float NoiseStd;
+
   FVelodyneLidar Sensor;
 
   /**
@@ -169,6 +172,10 @@ public:
 
 private:
   bool SupportMultithread = true;
+   
+  float GenerateGaussianNoise(float mean, float stdDev);
 
   void ConfigureVelodyneSensor();
+
+  float GetNoiseValue(FHitResult result);
 };
