@@ -1,5 +1,5 @@
-min_val = -25
-max_val = 15
+min_val = -22.5
+max_val = 22.5
 num_entries = 128
 def generate_cpp_array(num_entries, min_val, max_val):
     step = (max_val - min_val) / (num_entries-1)
@@ -16,5 +16,11 @@ def generate_cpp_array(num_entries, min_val, max_val):
     array_str = "{" + ", ".join([f"{val:.1f}f" for val in new_array]) + "};"
     return array_str
  
-cpp_array = generate_cpp_array(num_entries, min_val, max_val)
+def generate_array(num_entries, min_val, max_val):
+    step = (max_val - min_val) / (num_entries-1)
+    array = [min_val + step * i for i in range(num_entries)]
+    array_str = "{" + ", ".join([f"{val:.1f}f" for val in array]) + "};"
+    return array_str
+
+cpp_array = generate_array(num_entries, min_val, max_val)
 print(cpp_array)
