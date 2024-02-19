@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Velodyne/VelodyneBaseComponent.h"
+#include "Logging/LogMacros.h"
 
 // Sets default values for this component's properties
 UVelodyneBaseComponent::UVelodyneBaseComponent()
@@ -20,13 +21,15 @@ UVelodyneBaseComponent::UVelodyneBaseComponent()
   DestinationIP = FString(TEXT("0.0.0.0"));
   ScanPort = 2368;
   PositionPort = 8308;
-  NoiseStd = 0;
+  NoiseStd = 1.0f;
 }
 
 // Called when the game starts
 void UVelodyneBaseComponent::BeginPlay()
 {
   Super::BeginPlay();
+  FString TheFloatStr = FString::SanitizeFloat(NoiseStd);
+  UE_LOG(LogTemp, Warning, TEXT("%s"), *TheFloatStr);
 
   ConfigureVelodyneSensor();
 }
@@ -39,6 +42,9 @@ void UVelodyneBaseComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 void UVelodyneBaseComponent::EndPlay(EEndPlayReason::Type Reason)
 {
+  
+  FString TheFloatStr = FString::SanitizeFloat(NoiseStd);
+  UE_LOG(LogTemp, Warning, TEXT("%s"), *TheFloatStr);
   Super::EndPlay(Reason);
 }
 
@@ -106,7 +112,7 @@ void UVelodyneBaseComponent::ConfigureVelodyneSensor()
     break;
   }
   case 4:
-  { // VELARRAY : Not implemented
+  { // OS1 : Not implemented
     float Elevation[] = {15.f, -1.f, 13.f, -3.f, 11.f, -5.f, 9.f, -7.f,
                          7.f, -9.f, 5.f, -11.f, 3.f, -13.f, 1.f, -15.f};
     Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
@@ -120,8 +126,7 @@ void UVelodyneBaseComponent::ConfigureVelodyneSensor()
   }
   case 5:
   { // VLS_128 : Not implemented
-    float Elevation[] = {15.f, -1.f, 13.f, -3.f, 11.f, -5.f, 9.f, -7.f,
-                         7.f, -9.f, 5.f, -11.f, 3.f, -13.f, 1.f, -15.f};
+    float Elevation[] = {15.0f, -0.1f, 14.7f, -0.4f, 14.4f, -0.7f, 14.1f, -1.1f, 13.7f, -1.4f, 13.4f, -1.7f, 13.1f, -2.0f, 12.8f, -2.3f, 12.5f, -2.6f, 12.2f, -3.0f, 11.9f, -3.3f, 11.5f, -3.6f, 11.2f, -3.9f, 10.9f, -4.2f, 10.6f, -4.5f, 10.3f, -4.8f, 10.0f, -5.2f, 9.6f, -5.5f, 9.3f, -5.8f, 9.0f, -6.1f, 8.7f, -6.4f, 8.4f, -6.7f, 8.1f, -7.0f, 7.8f, -7.4f, 7.4f, -7.7f, 7.1f, -8.0f, 6.8f, -8.3f, 6.5f, -8.6f, 6.2f, -8.9f, 5.9f, -9.3f, 5.6f, -9.6f, 5.2f, -9.9f, 4.9f, -10.2f, 4.6f, -10.5f, 4.3f, -10.8f, 4.0f, -11.1f, 3.7f, -11.5f, 3.3f, -11.8f, 3.0f, -12.1f, 2.7f, -12.4f, 2.4f, -12.7f, 2.1f, -13.0f, 1.8f, -13.3f, 1.5f, -13.7f, 1.1f, -14.0f, 0.8f, -14.3f, 0.5f, -14.6f, 0.2f, -14.9f, -0.1f, -15.2f, -0.4f, -15.6f, -0.7f, -15.9f, -1.1f, -16.2f, -1.4f, -16.5f, -1.7f, -16.8f, -2.0f, -17.1f, -2.3f, -17.4f, -2.6f, -17.8f, -3.0f, -18.1f, -3.3f, -18.4f, -3.6f, -18.7f, -3.9f, -19.0f, -4.2f, -19.3f, -4.5f, -19.6f, -4.8f, -20.0f};
     Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
     Sensor.NumberLaserEmitter = 128;
     Sensor.NumberDataBlock = 12;
@@ -236,15 +241,16 @@ float UVelodyneBaseComponent::GenerateGaussianNoise(float mean, float stdDev)
 
 float UVelodyneBaseComponent::GetNoiseValue(FHitResult result)
 {
+  uint8 intensity = 255;
+
   auto PhysMat = result.PhysMaterial;
-  uint8 intensity = 1;
-  
+
   if (PhysMat != nullptr)
   {
     intensity = GetIntensity(*PhysMat->GetName(), (result.Distance * 2) / 10);
   }
-  
-  //normalize values
+
+  // normalize values
   float quality = (intensity) / 255;
 
   float randomNoise = GenerateGaussianNoise(0, NoiseStd);
@@ -309,6 +315,7 @@ void UVelodyneBaseComponent::GetScanData()
             LaserRotation.Add(VAngle, Sensor.AzimuthAngle[Index], 0.f);
             break;
           }
+          
           FRotator Rotation = UKismetMathLibrary::ComposeRotators(LaserRotation, LidarRotation);
 
           FVector BeginPoint = LidarPosition + Sensor.MinRange * UKismetMathLibrary::GetForwardVector(Rotation);
