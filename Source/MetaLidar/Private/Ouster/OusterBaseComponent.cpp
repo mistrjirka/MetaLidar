@@ -57,11 +57,14 @@ uint32_t UOusterBaseComponent::GetDataTypeSize(uint8 type) {
   }
 }
 
-uint32_t UOusterBaseComponent::CalculatePointStep(
-    const std::vector<PointField> &fields) {
+uint32_t
+UOusterBaseComponent::CalculatePointStep(const TArray<PointField> &fields) {
   uint32_t pointStep = 0;
-  for (const auto &field : fields) {
-    pointStep += GetDataTypeSize(field.datatype) * field.count;
+  UE_LOG(LogTemp, Warning, TEXT("Fields: %d"), fields.Num());
+  for (int i = 0; i < fields.Num(); i++) {
+    UE_LOG(LogTemp, Warning, TEXT("Field: %d"), fields[i].datatype);
+    UE_LOG(LogTemp, Warning, TEXT("Field: %d"), GetDataTypeSize(fields[i].datatype));
+    pointStep += GetDataTypeSize(fields[i].datatype) * fields[i].count;
   }
   return pointStep;
 }
@@ -101,16 +104,20 @@ void UOusterBaseComponent::ConfigureOusterSensor() {
         22.1f,  22.5f};
     Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
     Sensor.VerticalResolution = 128;
+    Sensor.SamplingRate = SRO10;
     Sensor.HorizontalResolution = 2048;
-    Sensor.fields = {PointField("x", PointField::FLOAT32, 1),
-                     PointField("y", PointField::FLOAT32, 1),
-                     PointField("z", PointField::FLOAT32, 1),
-                     PointField("intensity", PointField::FLOAT32, 1)};
+    Sensor.fields = {PointField('x', 0, PointField::FLOAT32, 1),
+                     PointField('y', 4,  PointField::FLOAT32, 1),
+                     PointField('z', 8, PointField::FLOAT32, 1),
+                     PointField('i', 12, PointField::FLOAT32, 1)};
     Sensor.PointStep = this->CalculatePointStep(Sensor.fields);
+    UE_LOG(LogTemp, Warning, TEXT("PointStep: %d"), Sensor.PointStep);
     Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep;
     Sensor.MinRange = 80.0f;
     Sensor.MaxRange = 12000.0f;
-    Sensor.PacketSize = sizeof(ScanData) + Sensor.HorizontalResolution * Sensor.VerticalResolution * Sensor.PointStep;
+    Sensor.PacketSize = sizeof(PointCloud2) + Sensor.HorizontalResolution *
+                                                  Sensor.VerticalResolution *
+                                                  Sensor.PointStep;
     break;
   }
   }
@@ -268,13 +275,15 @@ void UOusterBaseComponent::GetScanData() {
         }
 
         for (int32 Index = StartAt; Index < EndAt; ++Index) {
-          float horizontalStepAngle = (360 / HorizontalResolution);
-          float Azimuth = horizontalStepAngle *
-                          FMath::FloorToInt(Index / VerticalResolution);
-          float Elevation = Sensor.ElevationAngle[Index % VerticalResolution];
+          float horizontalStepAngle = (360 / Sensor.HorizontalResolution);
+          float Azimuth =
+              horizontalStepAngle *
+              FMath::FloorToInt((float)(Index / Sensor.VerticalResolution));
+          float Elevation =
+              Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
 
           FRotator LaserRotation(0.f, 0.f, 0.f);
-          LaserRotation.Add(VAngle, Azimuth, 0.f);
+          LaserRotation.Add(Elevation, Azimuth, 0.f);
           FRotator Rotation =
               UKismetMathLibrary::ComposeRotators(LaserRotation, LidarRotation);
 
@@ -286,10 +295,11 @@ void UOusterBaseComponent::GetScanData() {
               Sensor.MaxRange * UKismetMathLibrary::GetForwardVector(Rotation);
 
           FHitResult result;
-          GetWorld()->LineTraceSingleByChannel(result, BeginPoint, EndPoint, ECC_Visibility, TraceParams, FCollisionResponseParams::DefaultResponseParam);
+          GetWorld()->LineTraceSingleByChannel(
+              result, BeginPoint, EndPoint, ECC_Visibility, TraceParams,
+              FCollisionResponseParams::DefaultResponseParam);
 
-          if (result.IsValidBlockingHit())
-          {
+          if (result.IsValidBlockingHit()) {
             result.Distance += GetNoiseValue(result);
           }
 
@@ -312,50 +322,53 @@ uint32 UOusterBaseComponent::GetTimestampMicroseconds() {
                   1000000); // sec -> microsec
 }
 
-void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) 
-{
+void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
   PointCloud2 ScanData;
   ScanData.header.stamp = TimeStamp;
   ScanData.header.frame_id = "Ouster";
   ScanData.height = 1;
-  ScanData.width = Sensor.RecordedHits.num();
+  ScanData.width = Sensor.RecordedHits.Num();
   ScanData.fields = Sensor.fields;
   ScanData.is_bigendian = false;
   ScanData.point_step = Sensor.PointStep;
-  ScanData.row_step = Sensor.RecordedHits.num();
+  ScanData.row_step = Sensor.RecordedHits.Num();
   ScanData.is_dense = true;
-  ScanData.data.AddUninitialized(Sensor.RecordedHits.num()*Sensor.PointStep)
-  for(int i = 0; i < Sensor.RecordedHits.num(); i++)
-  {
+  ScanData.numOfFields = Sensor.fields.Num();
+  // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
+  // Sensor.RecordedHits.Num());
+
+  for (int i = 0; i < Sensor.RecordedHits.Num(); i++) {
+    if (!Sensor.RecordedHits[i].IsValidBlockingHit()) {
+      continue;
+    }
+
     FVector Location = Sensor.RecordedHits[i].Location;
     PointXYZI Point;
     Point.x = Location.X;
     Point.y = Location.Y;
     Point.z = Location.Z;
 
-
     auto PhysMat = Sensor.RecordedHits[i].PhysMaterial;
-    if (PhysMat != nullptr)
-    {
-      Point.intensity = GetIntensity(*PhysMat->GetName(), (Distance * 2) / 10);
-    }
-    else
-    {
+    if (PhysMat != nullptr) {
+      Point.intensity = GetIntensity(
+          *PhysMat->GetName(), (Sensor.RecordedHits[i].Distance * 2) / 10);
+    } else {
       Point.intensity = 0x00;
     }
-    char *data[Sensor.PointStep];
-    Memcpy(data, &Point, Sensor.PointStep);
 
-    for(int j = 0; j < Sensor.PointStep; j++)
-    {
-      ScanData.data[i * Sensor.PointStep + j] = data[j];
+    unsigned char data[Sensor.PointStep];
+    FMemory::Memcpy(data, &Point, Sensor.PointStep);
+
+    for (int j = 0; j < Sensor.PointStep; j++) {
+      ScanData.data.Add(data[j]);
     }
   }
 
-  uint32 DataPacketSize = sizeof(ScanData) + Sensor.RecordedHits.num()*Sensor.PointStep;
-  Sensor.DataPacket.AddUninitialized(DataPacketSize);
+  uint32 DataPacketSize =
+      sizeof(PointCloud2) + ScanData.data.Num() * Sensor.PointStep;
+  Sensor.DataPacket.Reserve(DataPacketSize);
   char *dataToCopy = reinterpret_cast<char *>(&ScanData);
-  Memcpy(Sensor.DataPacket, dataToCopy, DataPacketSize);
+  FMemory::Memcpy(Sensor.DataPacket.GetData(), dataToCopy, DataPacketSize);
 }
 
 FString UOusterBaseComponent::DecToHex(int DecimalNumber) {

@@ -24,10 +24,10 @@ void AOusterLidarActor::BeginPlay()
     UdpScanComponent->OpenReceiveSocket(UdpScanComponent->Settings.ReceiveIP, UdpScanComponent->Settings.SendPort);
   }
 
-  FTimespan ThreadSleepTime = FTimespan ThreadSleepTime = FTimespan::FromSeconds(1 / LidarComponent->Sensor.ScanRate);
+  FTimespan ThreadSleepTime = FTimespan::FromSeconds(1 / LidarComponent->Sensor.SamplingRate);
   FString UniqueThreadName = "LidarThread";
 
-   = new LidarThreadProcess(ThreadSleepTime,*UniqueThreadName, this);
+  LidarThread = new LidarThreadProcess(ThreadSleepTime,*UniqueThreadName, this);
 
   if(LidarThread)
   {
@@ -94,10 +94,7 @@ void AOusterLidarActor::LidarThreadTick()
 
   LidarComponent->GenerateDataPacket(PacketTimestamp);
 
-
-
-
-
+  UdpScanComponent->EmitBytes(LidarComponent->Sensor.DataPacket);
 }
 
 void AOusterLidarActor::ConfigureUDPScan()

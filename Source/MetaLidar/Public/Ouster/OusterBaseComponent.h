@@ -9,7 +9,6 @@
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include <cstdint>
 #include <string>
-#include <vector>
 #include "OusterBaseComponent.generated.h"
 
 
@@ -18,41 +17,42 @@ class PacketGenerationTask;
 
 // ROS standard header file
 typedef struct Header {
-  uint32_t seq;         // sequence ID
+  uint32 seq;         // sequence ID
   double stamp;         // timestamp in seconds
   std::string frame_id; // frame ID in which the data is observed
 } Header;
 
 // Data structure for a single field in PointCloud2
 typedef struct PointField {
-  std::string name; // Name of the field (e.g., x, y, z, intensity)
-  uint32_t offset;  // Offset from the start of the point struct
-  uint8_t datatype; // Data type of the elements (e.g., FLOAT32, UINT8)
-  uint32_t
+  char name; // Name of the field (e.g., x, y, z, intensity)
+  uint32 offset;  // Offset from the start of the point struct
+  uint8 datatype; // Data type of the elements (e.g., FLOAT32, UINT8)
+  uint32
       count; // Number of elements in the field (e.g., 1 for x, y, z; 3 for RGB)
 
   // Constants for data types
-  static const uint8_t INT8 = 1;
-  static const uint8_t UINT8 = 2;
-  static const uint8_t INT16 = 3;
-  static const uint8_t UINT16 = 4;
-  static const uint8_t INT32 = 5;
-  static const uint8_t UINT32 = 6;
-  static const uint8_t FLOAT32 = 7;
-  static const uint8_t FLOAT64 = 8;
+  static const uint8 INT8 = 1;
+  static const uint8 UINT8 = 2;
+  static const uint8 INT16 = 3;
+  static const uint8 UINT16 = 4;
+  static const uint8 INT32 = 5;
+  static const uint8 UINT32 = 6;
+  static const uint8 FLOAT32 = 7;
+  static const uint8 FLOAT64 = 8;
 } PointField;
 
 // The PointCloud2 message structure
 typedef struct PointCloud2 {
   Header header;   // Standard ROS message header
-  uint32_t height; // Height of the point cloud dataset
-  uint32_t width;  // Width of the point cloud dataset
-  std::vector<PointField>
+  uint32 height; // Height of the point cloud dataset
+  uint32 width;  // Width of the point cloud dataset
+  uint32 numOfFields;
+  TArray<PointField>
       fields; // Describes the channels and their layout in the binary data blob
   bool is_bigendian;   // Is the data big-endian
-  uint32_t point_step; // Length of a point in bytes
-  uint32_t row_step;   // Length of a row in bytes
-  std::vector<uint8_t>
+  uint32 point_step; // Length of a point in bytes
+  uint32 row_step;   // Length of a row in bytes
+  TArray<uint8>
       data;      // Actual point cloud data, size is (row_step*height)
   bool is_dense; // True if there are no invalid points (NaN or Inf)
 } PointCloud2;
@@ -91,7 +91,7 @@ struct FOusterLidar {
 public:
   uint16 VerticalResolution;
   uint16 HorizontalResolution;
-  std::vector<PointField> fields;
+  TArray<PointField> fields;
   uint32 PointStep;
   uint32 RowStep;
   TArray<float> ElevationAngle;
@@ -201,7 +201,7 @@ private:
 
   float GetNoiseValue(FHitResult result);
 
-  uint32_t CalculatePointStep(const std::vector<PointField> &fields);
+  uint32 CalculatePointStep(const TArray<PointField> &fields);
   // Function to get the size of the data type in bytes
-  uint32_t GetDataTypeSize(uint8_t type);
+  uint32 GetDataTypeSize(uint8 type);
 };
