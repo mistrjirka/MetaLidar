@@ -304,7 +304,10 @@ void UVelodyneBaseComponent::GetScanData()
 
           Sensor.AzimuthAngle[Index] += HAngle;
           Sensor.AzimuthAngle[Index] = (Sensor.AzimuthAngle[Index] > 360.0 ? Sensor.AzimuthAngle[Index] - 360.f : Sensor.AzimuthAngle[Index]);
+          FString HAngleFloat = FString::SanitizeFloat(HAngle);
+          FString AzimuthFloat = FString::SanitizeFloat(Sensor.AzimuthAngle[Index]);
 
+          UE_LOG(LogTemp, Warning, TEXT("vangle: %s azimuthAngle %s"), *HAngleFloat, *AzimuthFloat);
           FRotator LaserRotation(0.f, 0.f, 0.f);
           switch (Sensor.ModelNumber)
           {

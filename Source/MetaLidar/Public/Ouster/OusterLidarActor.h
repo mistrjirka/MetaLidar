@@ -3,24 +3,24 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Velodyne/VelodyneBaseComponent.h"
+#include "Ouster/OusterBaseComponent.h"
 #include "LidarBaseActor.h"
-#include "VelodyneLidarActor.generated.h"
+#include "OusterLidarActor.generated.h"
 
 /**
  *
  */
 UCLASS()
-class METALIDAR_API AVelodyneLidarActor : public ALidarBaseActor
+class METALIDAR_API AOusterLidarActor : public ALidarBaseActor
 {
   GENERATED_BODY()
 
 public:
   // Sets default values for this actor's properties
-  AVelodyneLidarActor();
+  AOusterLidarActor();
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "MetaLidar")
-  class UVelodyneBaseComponent* LidarComponent;
+  class UOusterBaseComponent* LidarComponent;
 
 protected:
   // Called when the game starts or when spawned

@@ -2,15 +2,16 @@
 
 #pragma once
 
-#include "Components/ActorComponent.h"
 #include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
 #include "Kismet/KismetMathLibrary.h"
-#include "OusterBaseComponent.generated.h"
-#include "PhysicalMaterials/PhysicalMaterial.h"
 #include "Physics/PhysicsInterfaceCore.h"
+#include "PhysicalMaterials/PhysicalMaterial.h"
 #include <cstdint>
 #include <string>
 #include <vector>
+#include "OusterBaseComponent.generated.h"
+
 
 class UPhysicalMaterial;
 class PacketGenerationTask;
@@ -56,22 +57,29 @@ typedef struct PointCloud2 {
   bool is_dense; // True if there are no invalid points (NaN or Inf)
 } PointCloud2;
 
+typedef struct PointXYZI {
+  float x;
+  float y;
+  float z;
+  float intensity;
+} PointXYZI;
+
 UENUM(BlueprintType)
-enum EModelName {
+enum EOusterModelName {
   OS1 UMETA(DisplayName = "OS-1"),
 };
 
 UENUM(BlueprintType)
-enum EFrequency {
-  SR05 UMETA(DisplayName = "5 Hz"),
-  SR10 UMETA(DisplayName = "10 Hz"),
-  SR15 UMETA(DisplayName = "15 Hz"),
-  SR20 UMETA(DisplayName = "20 Hz")
+enum EOusterFrequency {
+  SRO05 UMETA(DisplayName = "5 Hz"),
+  SRO10 UMETA(DisplayName = "10 Hz"),
+  SRO15 UMETA(DisplayName = "15 Hz"),
+  SRO20 UMETA(DisplayName = "20 Hz")
 };
 
 UENUM(BlueprintType)
-enum ELaserReturnMode {
-  Strongest UMETA(DisplayName = "Strongest"),
+enum EOusterLaserReturnMode {
+  StrongestO UMETA(DisplayName = "Strongest"),
   // LastReturn UMETA(DisplayName = "Last Return"),
   // DualReturn UMETA(DisplayName = "Dual Return")
 };
@@ -93,6 +101,9 @@ public:
   uint8 SamplingRate;
   uint8 ReturnMode;
   uint8 ModelNumber;
+  uint32 PacketSize;
+  float MinRange;
+  float MaxRange;
 };
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
@@ -104,13 +115,13 @@ public:
   UOusterBaseComponent();
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ouster")
-  TEnumAsByte<EModelName> SensorModel;
+  TEnumAsByte<EOusterModelName> SensorModel;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ouster")
-  TEnumAsByte<EFrequency> SamplingRate;
+  TEnumAsByte<EOusterFrequency> SamplingRate;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ouster")
-  TEnumAsByte<ELaserReturnMode> ReturnMode;
+  TEnumAsByte<EOusterLaserReturnMode> ReturnMode;
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ouster")
   FString SensorIP;
@@ -192,5 +203,5 @@ private:
 
   uint32_t CalculatePointStep(const std::vector<PointField> &fields);
   // Function to get the size of the data type in bytes
-  uint32_t GetDataTypeSize(DataType type);
+  uint32_t GetDataTypeSize(uint8_t type);
 };

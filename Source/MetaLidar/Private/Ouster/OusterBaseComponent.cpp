@@ -1,8 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
-
-#include "Logging/LogMacros.h"
 #include "Ouster/OusterBaseComponent.h"
 
+#include "Logging/LogMacros.h"
 
 // Sets default values for this component's properties
 UOusterBaseComponent::UOusterBaseComponent() {
@@ -15,9 +14,9 @@ UOusterBaseComponent::UOusterBaseComponent() {
   SupportMultithread = FPlatformProcess::SupportsMultithreading();
 
   // Set-up initial values
-  SensorModel = EModelName::VLP16;
-  SamplingRate = EFrequency::SR10;
-  ReturnMode = ELaserReturnMode::Strongest;
+  SensorModel = EOusterModelName::OS1;
+  SamplingRate = EOusterFrequency::SRO10;
+  ReturnMode = EOusterLaserReturnMode::StrongestO;
   SensorIP = FString(TEXT("127.0.0.1"));
   DestinationIP = FString(TEXT("0.0.0.0"));
   ScanPort = 2368;
@@ -35,26 +34,36 @@ void UOusterBaseComponent::BeginPlay() {
 }
 
 // Function to get the size of the data type in bytes
-uint32_t UOusterBaseComponent::GetDataTypeSize(DataType type) {
-    switch (type) {
-        case INT8: return 1;
-        case UINT8: return 1;
-        case INT16: return 2;
-        case UINT16: return 2;
-        case INT32: return 4;
-        case UINT32: return 4;
-        case FLOAT32: return 4;
-        case FLOAT64: return 8;
-        default: return 0; // Should never be reached
-    }
+uint32_t UOusterBaseComponent::GetDataTypeSize(uint8 type) {
+  switch (type) {
+  case PointField::INT8:
+    return 1;
+  case PointField::UINT8:
+    return 1;
+  case PointField::INT16:
+    return 2;
+  case PointField::UINT16:
+    return 2;
+  case PointField::INT32:
+    return 4;
+  case PointField::UINT32:
+    return 4;
+  case PointField::FLOAT32:
+    return 4;
+  case PointField::FLOAT64:
+    return 8;
+  default:
+    return 0; // Should never be reached
+  }
 }
 
-uint32_t UOusterBaseComponent::CalculatePointStep(const std::vector<PointField>& fields) {
-    uint32_t pointStep = 0;
-    for (const auto& field : fields) {
-        pointStep += GetDataTypeSize(field.datatype) * field.count;
-    }
-    return pointStep;
+uint32_t UOusterBaseComponent::CalculatePointStep(
+    const std::vector<PointField> &fields) {
+  uint32_t pointStep = 0;
+  for (const auto &field : fields) {
+    pointStep += GetDataTypeSize(field.datatype) * field.count;
+  }
+  return pointStep;
 }
 
 // Called every frame
@@ -93,15 +102,15 @@ void UOusterBaseComponent::ConfigureOusterSensor() {
     Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
     Sensor.VerticalResolution = 128;
     Sensor.HorizontalResolution = 2048;
-    Sensor.fields = {
-        PointField("x", FLOAT32, 1),
-        PointField("y", FLOAT32, 1),
-        PointField("z", FLOAT32, 1),
-        PointField("intensity", FLOAT32, 1)
-    };
+    Sensor.fields = {PointField("x", PointField::FLOAT32, 1),
+                     PointField("y", PointField::FLOAT32, 1),
+                     PointField("z", PointField::FLOAT32, 1),
+                     PointField("intensity", PointField::FLOAT32, 1)};
     Sensor.PointStep = this->CalculatePointStep(Sensor.fields);
-    Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep; 
-
+    Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep;
+    Sensor.MinRange = 80.0f;
+    Sensor.MaxRange = 12000.0f;
+    Sensor.PacketSize = sizeof(ScanData) + Sensor.HorizontalResolution * Sensor.VerticalResolution * Sensor.PointStep;
     break;
   }
   }
@@ -137,12 +146,10 @@ void UOusterBaseComponent::ConfigureOusterSensor() {
   }
 
   // Initialize raycast vector and azimuth vector
-  Sensor.AzimuthAngle.Init(90.f,
-                           Sensor.NumberDataBlock * Sensor.NumberDataChannel);
+  Sensor.AzimuthAngle.Init(90.f, this->Sensor.VerticalResolution *
+                                     this->Sensor.HorizontalResolution);
 
-  // Initialize packet vector
-  Sensor.DataPacket.AddUninitialized(DATA_PACKET_PAYLOAD);
-  Sensor.PositionPacket.AddUninitialized(POSITION_PACKET_PAYLOAD);
+  // Sensor.DataPacket.AddUninitialized(DATA_PACKET_PAYLOAD);
 }
 
 // The VLP-16 measures reflectivity of an object independent of laser power and
@@ -235,19 +242,21 @@ void UOusterBaseComponent::GetScanData() {
 
   // Initialize array for raycast result
   Sensor.RecordedHits.Init(FHitResult(ForceInit),
-                           Sensor.NumberDataBlock * Sensor.NumberDataChannel);
-  Sensor.AzimuthAngle.Init(Sensor.AzimuthAngle[Sensor.AzimuthAngle.Num() - 1] +
-                               Sensor.AzimuthResolution,
-                           Sensor.NumberDataBlock * Sensor.NumberDataChannel);
+                           Sensor.VerticalResolution *
+                               Sensor.HorizontalResolution);
 
   // Calculate batch size for 'ParallelFor' based on workable thread
-  const int ThreadNum = FPlatformMisc::NumberOfWorkerThreadsToSpawn();
+  const int ThreadNum = 1 /*FPlatformMisc::NumberOfWorkerThreadsToSpawn()*/;
+
+  // Divide work across threads, each thread processes a portion of all hits
+  // (vertically and horizontally)
   const int DivideEnd =
       FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNum));
-
   ParallelFor(
       ThreadNum,
       [&](int32 PFIndex) {
+        // divide work acrosss threads. Each thread will process a portion of
+        // the hits.
         int StartAt = PFIndex * DivideEnd;
         if (StartAt >= Sensor.RecordedHits.Num()) {
           return;
@@ -259,31 +268,13 @@ void UOusterBaseComponent::GetScanData() {
         }
 
         for (int32 Index = StartAt; Index < EndAt; ++Index) {
-          const float HAngle =
-              (float)((int32)(Index / Sensor.NumberLaserEmitter) *
-                      Sensor.AzimuthResolution);
-          const float VAngle =
-              (float)Sensor.ElevationAngle[Index % Sensor.NumberLaserEmitter];
-
-          Sensor.AzimuthAngle[Index] += HAngle;
-          Sensor.AzimuthAngle[Index] = (Sensor.AzimuthAngle[Index] > 360.0
-                                            ? Sensor.AzimuthAngle[Index] - 360.f
-                                            : Sensor.AzimuthAngle[Index]);
+          float horizontalStepAngle = (360 / HorizontalResolution);
+          float Azimuth = horizontalStepAngle *
+                          FMath::FloorToInt(Index / VerticalResolution);
+          float Elevation = Sensor.ElevationAngle[Index % VerticalResolution];
 
           FRotator LaserRotation(0.f, 0.f, 0.f);
-          switch (Sensor.ModelNumber) {
-          case 40: // VLP-32C
-            LaserRotation.Add(
-                VAngle,
-                Sensor.AzimuthAngle[Index] +
-                    Sensor.AzimuthOffset[Index % Sensor.NumberLaserEmitter],
-                0.f);
-            break;
-          default:
-            LaserRotation.Add(VAngle, Sensor.AzimuthAngle[Index], 0.f);
-            break;
-          }
-
+          LaserRotation.Add(VAngle, Azimuth, 0.f);
           FRotator Rotation =
               UKismetMathLibrary::ComposeRotators(LaserRotation, LidarRotation);
 
@@ -295,16 +286,15 @@ void UOusterBaseComponent::GetScanData() {
               Sensor.MaxRange * UKismetMathLibrary::GetForwardVector(Rotation);
 
           FHitResult result;
-          GetWorld()->LineTraceSingleByChannel(
-              result, BeginPoint, EndPoint, ECC_Visibility, TraceParams,
-              FCollisionResponseParams::DefaultResponseParam);
+          GetWorld()->LineTraceSingleByChannel(result, BeginPoint, EndPoint, ECC_Visibility, TraceParams, FCollisionResponseParams::DefaultResponseParam);
 
-          if (result.IsValidBlockingHit()) {
+          if (result.IsValidBlockingHit())
+          {
             result.Distance += GetNoiseValue(result);
           }
 
           Sensor.RecordedHits[Index] = result;
-        }
+        };
       },
       !SupportMultithread);
 }
@@ -322,192 +312,50 @@ uint32 UOusterBaseComponent::GetTimestampMicroseconds() {
                   1000000); // sec -> microsec
 }
 
-void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
-  // Packet should be encoded based on Sensor Model & Scanning Mode
-  uint8 DataFlag[2];
-  uint8 AzimuthData[2];
-  uint8 DistanceData[2];
-  uint8 IntensityData[1];
-  uint8 TailData[6];
-
-  int32 PacketIndex = 0;
-  for (int32 Index = 0; Index < Sensor.RecordedHits.Num(); Index++) {
-
-    if (Index % (Sensor.NumberDataChannel) == 0) {
-      // Add data flag
-      DataFlag[0] = 0xFF;
-      DataFlag[1] = 0xEE;
-      FMemory::Memcpy(Sensor.DataPacket.GetData() + PacketIndex, DataFlag,
-                      UE_ARRAY_COUNT(DataFlag));
-      PacketIndex += UE_ARRAY_COUNT(DataFlag);
-
-      // Azimuth data
-      uint16 Azimuth = (uint16)(Sensor.AzimuthAngle[Index] * 100);
-      AzimuthData[0] = Azimuth & 0x00FF;
-      AzimuthData[1] = (Azimuth & 0xFF00) >> 8;
-
-      FMemory::Memcpy(Sensor.DataPacket.GetData() + PacketIndex, AzimuthData,
-                      UE_ARRAY_COUNT(AzimuthData));
-      PacketIndex += UE_ARRAY_COUNT(AzimuthData);
-    }
-
-    // Range data : converting from cm to mm
-    // We should add minimum range to make distance from sensor origin
-    uint16 Distance = 0;
-    if (Sensor.RecordedHits[Index].bBlockingHit) {
-      Distance =
-          ((Sensor.RecordedHits[Index].Distance + Sensor.MinRange) * 10) /
-          2; // 2mm resolution
-    }
-    DistanceData[0] = Distance & 0x00FF;
-    DistanceData[1] = (Distance & 0xFF00) >> 8;
-    FMemory::Memcpy(Sensor.DataPacket.GetData() + PacketIndex, DistanceData,
-                    UE_ARRAY_COUNT(DistanceData));
-    PacketIndex += UE_ARRAY_COUNT(DistanceData);
-
-    // Intensity data
-    auto PhysMat = Sensor.RecordedHits[Index].PhysMaterial;
-    if (PhysMat != nullptr) {
-      IntensityData[0] = GetIntensity(*PhysMat->GetName(), (Distance * 2) / 10);
-    } else {
-      IntensityData[0] = 0x00;
-    }
-    FMemory::Memcpy(Sensor.DataPacket.GetData() + PacketIndex, IntensityData,
-                    UE_ARRAY_COUNT(IntensityData));
-    PacketIndex += UE_ARRAY_COUNT(IntensityData);
-  }
-
-  // Add timestamp (0 ~ 35999) and factory bytes
-  TailData[0] = TimeStamp & 0x000000FF;
-  TailData[1] = (TimeStamp & 0x0000FF00) >> 8;
-  TailData[2] = (TimeStamp & 0x00FF0000) >> 16;
-  TailData[3] = (TimeStamp & 0xFF000000) >> 24;
-  TailData[4] = Sensor.ReturnMode;
-  TailData[5] = Sensor.ModelNumber;
-  FMemory::Memcpy(Sensor.DataPacket.GetData() + DATA_PACKET_PAYLOAD - 6,
-                  TailData, UE_ARRAY_COUNT(TailData));
-  PacketIndex += UE_ARRAY_COUNT(TailData);
-}
-
-void UOusterBaseComponent::GeneratePositionPacket(uint32 TimeStamp) {
-  // Packet should be encoded based on Sensor Model & Scanning Mode
-  uint8 UnusedPacket[187] = {0};
-  uint8 ReservedPacket[178] = {0};
-  uint8 NMEAPacket[128] = {0};
-  uint8 TimeStampPacket[4] = {0};
-  uint8 OneBytePacket[1] = {0};
-  uint8 TwoBytePacket[2] = {0};
-  uint8 FourBytePacket[4] = {0};
-
-  int32 PacketIndex = 0;
-
-  // reserved (unused)
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, UnusedPacket,
-                  UE_ARRAY_COUNT(UnusedPacket));
-  PacketIndex += UE_ARRAY_COUNT(UnusedPacket);
-
-  // Temperature of top board (0 to 150°C)
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, OneBytePacket,
-                  UE_ARRAY_COUNT(OneBytePacket));
-  PacketIndex += UE_ARRAY_COUNT(OneBytePacket);
-
-  // Temperature of bottom board (0 to 150°C)
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, OneBytePacket,
-                  UE_ARRAY_COUNT(OneBytePacket));
-  PacketIndex += UE_ARRAY_COUNT(OneBytePacket);
-
-  // Temperature when ADC calibration last ran (0 to 150°C)
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, OneBytePacket,
-                  UE_ARRAY_COUNT(OneBytePacket));
-  PacketIndex += UE_ARRAY_COUNT(OneBytePacket);
-
-  // Change in temperature since last ADC calibration (-150 to 150°C)
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, TwoBytePacket,
-                  UE_ARRAY_COUNT(TwoBytePacket));
-  PacketIndex += UE_ARRAY_COUNT(TwoBytePacket);
-
-  // Elapsed seconds since last ADC calibration (0 to 2^32-1)
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, FourBytePacket,
-                  UE_ARRAY_COUNT(FourBytePacket));
-  PacketIndex += UE_ARRAY_COUNT(FourBytePacket);
-
-  // Reason for the last ADC calibration
-  // 0: No calibration
-  // 1: Power-on calibration performed
-  // 2: Manual calibration performed
-  // 3: Delta temperature calibration performed
-  // 4: Periodic calibration performed
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, OneBytePacket,
-                  UE_ARRAY_COUNT(OneBytePacket));
-  PacketIndex += UE_ARRAY_COUNT(OneBytePacket);
-
-  // Bitmask indicating current status of ADC calibration
-  // These bit fields are not mutually exclusive. The condition is True if the
-  // bit field value is 1. b0: Calibration in progress b1: Delta temperature
-  // limit has been met b2: Periodic time elapsed limit has been met Each status
-  // bit reflects the current sensor condition but does not imply any
-  // calibration occurred.
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, OneBytePacket,
-                  UE_ARRAY_COUNT(OneBytePacket));
-  PacketIndex += UE_ARRAY_COUNT(OneBytePacket);
-
-  // µsec since top of the hour
-  TimeStampPacket[0] = TimeStamp & 0x000000FF;
-  TimeStampPacket[1] = (TimeStamp & 0x0000FF00) >> 8;
-  TimeStampPacket[2] = (TimeStamp & 0x00FF0000) >> 16;
-  TimeStampPacket[3] = (TimeStamp & 0xFF000000) >> 24;
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex,
-                  TimeStampPacket, UE_ARRAY_COUNT(TimeStampPacket));
-  PacketIndex += UE_ARRAY_COUNT(TimeStampPacket);
-
-  // Pulse Per Second (PPS) status
-  // 0: Absent
-  // 1: Synchronizing
-  // 2: Locked
-  // 3: Error
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, OneBytePacket,
-                  UE_ARRAY_COUNT(OneBytePacket));
-  PacketIndex += UE_ARRAY_COUNT(OneBytePacket);
-
-  // Thermal status
-  // 0: Ok
-  // 1: Thermal shutdown
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, OneBytePacket,
-                  UE_ARRAY_COUNT(OneBytePacket));
-  PacketIndex += UE_ARRAY_COUNT(OneBytePacket);
-
-  // Last shutdown temperature
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, OneBytePacket,
-                  UE_ARRAY_COUNT(OneBytePacket));
-  PacketIndex += UE_ARRAY_COUNT(OneBytePacket);
-
-  // Temperature of unit at power up
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, OneBytePacket,
-                  UE_ARRAY_COUNT(OneBytePacket));
-  PacketIndex += UE_ARRAY_COUNT(OneBytePacket);
-
-  // NMEA sentence (GPRMC or GPGGA)
-  // [To-Do] Should be implemented
-  // if (EnablePositionSensor)
-  // {
-  //   ASCIItoHEX("$GPRMC,205948,A,3716.6694,N,12153.4550,W,000.0,078.4,260715,013.9,E,D*07",
-  //   NMEAPacket);
-  //   //FString Fs = FString(UTF8_TO_TCHAR(NMEAPacket));
-  //   //UE_LOG(LogTemp, Warning, TEXT("%s"), *Fs);
-  //   FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex,
-  //   NMEAPacket, UE_ARRAY_COUNT(NMEAPacket));
-  // }
-  // else
+void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) 
+{
+  PointCloud2 ScanData;
+  ScanData.header.stamp = TimeStamp;
+  ScanData.header.frame_id = "Ouster";
+  ScanData.height = 1;
+  ScanData.width = Sensor.RecordedHits.num();
+  ScanData.fields = Sensor.fields;
+  ScanData.is_bigendian = false;
+  ScanData.point_step = Sensor.PointStep;
+  ScanData.row_step = Sensor.RecordedHits.num();
+  ScanData.is_dense = true;
+  ScanData.data.AddUninitialized(Sensor.RecordedHits.num()*Sensor.PointStep)
+  for(int i = 0; i < Sensor.RecordedHits.num(); i++)
   {
-    FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, NMEAPacket,
-                    UE_ARRAY_COUNT(NMEAPacket));
+    FVector Location = Sensor.RecordedHits[i].Location;
+    PointXYZI Point;
+    Point.x = Location.X;
+    Point.y = Location.Y;
+    Point.z = Location.Z;
+
+
+    auto PhysMat = Sensor.RecordedHits[i].PhysMaterial;
+    if (PhysMat != nullptr)
+    {
+      Point.intensity = GetIntensity(*PhysMat->GetName(), (Distance * 2) / 10);
+    }
+    else
+    {
+      Point.intensity = 0x00;
+    }
+    char *data[Sensor.PointStep];
+    Memcpy(data, &Point, Sensor.PointStep);
+
+    for(int j = 0; j < Sensor.PointStep; j++)
+    {
+      ScanData.data[i * Sensor.PointStep + j] = data[j];
+    }
   }
 
-  PacketIndex += UE_ARRAY_COUNT(NMEAPacket);
-
-  // reserved
-  FMemory::Memcpy(Sensor.PositionPacket.GetData() + PacketIndex, ReservedPacket,
-                  UE_ARRAY_COUNT(ReservedPacket));
+  uint32 DataPacketSize = sizeof(ScanData) + Sensor.RecordedHits.num()*Sensor.PointStep;
+  Sensor.DataPacket.AddUninitialized(DataPacketSize);
+  char *dataToCopy = reinterpret_cast<char *>(&ScanData);
+  Memcpy(Sensor.DataPacket, dataToCopy, DataPacketSize);
 }
 
 FString UOusterBaseComponent::DecToHex(int DecimalNumber) {

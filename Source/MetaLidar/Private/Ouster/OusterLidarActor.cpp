@@ -1,19 +1,19 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "Velodyne/VelodyneLidarActor.h"
+#include "Ouster/OusterLidarActor.h"
 
 // Sets default values
-AVelodyneLidarActor::AVelodyneLidarActor()
+AOusterLidarActor::AOusterLidarActor()
 {
   // Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
   PrimaryActorTick.bCanEverTick = false;
 
-  LidarComponent = CreateDefaultSubobject<UVelodyneBaseComponent>(TEXT("VelodyneComponent"));
+  LidarComponent = CreateDefaultSubobject<UOusterBaseComponent>(TEXT("OusterComponent"));
   this->AddOwnedComponent(LidarComponent);
 }
 
 // Called when the game starts or when spawned
-void AVelodyneLidarActor::BeginPlay()
+void AOusterLidarActor::BeginPlay()
 {
   Super::BeginPlay();
 
@@ -24,11 +24,10 @@ void AVelodyneLidarActor::BeginPlay()
     UdpScanComponent->OpenReceiveSocket(UdpScanComponent->Settings.ReceiveIP, UdpScanComponent->Settings.SendPort);
   }
 
-  FTimespan ThreadSleepTime =
-  FTimespan::FromMilliseconds(LidarComponent->Sensor.NumberDataBlock * (LidarComponent->Sensor.NumberDataChannel / LidarComponent->Sensor.NumberLaserEmitter) * (0.000001f * FIRING_CYCLE));
+  FTimespan ThreadSleepTime = FTimespan ThreadSleepTime = FTimespan::FromSeconds(1 / LidarComponent->Sensor.ScanRate);
   FString UniqueThreadName = "LidarThread";
 
-  LidarThread = new LidarThreadProcess(ThreadSleepTime,*UniqueThreadName, this);
+   = new LidarThreadProcess(ThreadSleepTime,*UniqueThreadName, this);
 
   if(LidarThread)
   {
@@ -38,7 +37,7 @@ void AVelodyneLidarActor::BeginPlay()
   }
 }
 
-void AVelodyneLidarActor::EndPlay(EEndPlayReason::Type Reason)
+void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason)
 {
   if(LidarThread)
   {
@@ -68,7 +67,7 @@ void AVelodyneLidarActor::EndPlay(EEndPlayReason::Type Reason)
 // ! On Thread (not game thread)
 // Never stop until finished calculating!
 // This would be a verrrrry large hitch if done on game thread!
-void AVelodyneLidarActor::LidarThreadTick()
+void AOusterLidarActor::LidarThreadTick()
 {
   float TimeDiffMs = 0;
 
@@ -93,29 +92,19 @@ void AVelodyneLidarActor::LidarThreadTick()
   // Generate raycasting data
   LidarComponent->GetScanData();
 
-  // Generate veldyne data packet
   LidarComponent->GenerateDataPacket(PacketTimestamp);
 
-  // Multicast Delegate event for broadcating packet data
-  UdpScanComponent->EmitBytes(LidarComponent->Sensor.DataPacket);
 
-  TimeDiffMs = (float)(FPlatformTime::Seconds() - BeginTimestamp);
 
-  if( TimeDiffMs > 0.0f )
-  {
-    FPlatformProcess::SleepNoStats(TimeDiffMs);
-  }
-  else
-  {
-    FPlatformProcess::SleepNoStats(0);
-  }
+
+
 }
 
-void AVelodyneLidarActor::ConfigureUDPScan()
+void AOusterLidarActor::ConfigureUDPScan()
 {
   UdpScanComponent->Settings.SendIP    = LidarComponent->DestinationIP;
   UdpScanComponent->Settings.ReceiveIP = LidarComponent->SensorIP;
   UdpScanComponent->Settings.SendPort  = LidarComponent->ScanPort;
   UdpScanComponent->Settings.SendSocketName = FString(TEXT("ue5-scan-send"));
-  UdpScanComponent->Settings.BufferSize = PACKET_HEADER_SIZE + DATA_PACKET_PAYLOAD;
+  UdpScanComponent->Settings.BufferSize = LidarComponent->Sensor.PacketSize;
 }
