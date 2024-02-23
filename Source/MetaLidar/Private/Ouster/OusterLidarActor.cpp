@@ -1,7 +1,29 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Ouster/OusterLidarActor.h"
+THIRD_PARTY_INCLUDES_START
+#include "zlib.h"
+THIRD_PARTY_INCLUDES_END
 
+TArray<uint8> CompressData(const TArray<uint8>& InData)
+{
+    if (InData.Num() == 0)
+    {
+        return TArray<uint8>();
+    }
+
+    uLongf OutBufferSize = compressBound(InData.Num());
+    TArray<uint8> OutData;
+    OutData.AddUninitialized(OutBufferSize);
+
+    if (compress2(OutData.GetData(), &OutBufferSize, InData.GetData(), InData.Num(), Z_BEST_COMPRESSION) != Z_OK)
+    {
+        // Handle error
+    }
+
+    OutData.SetNum(OutBufferSize);
+    return OutData;
+}
 // Sets default values
 AOusterLidarActor::AOusterLidarActor()
 {
@@ -93,8 +115,10 @@ void AOusterLidarActor::LidarThreadTick()
   LidarComponent->GetScanData();
 
   LidarComponent->GenerateDataPacket(PacketTimestamp);
+  TArray<uint8> DataToSend = CompressData(LidarComponent->Sensor.DataPacket);
+  UE_LOG(LogTemp, Warning, TEXT("Packet acctual size: %d Packet Expected size %d Compressed %d"), LidarComponent->Sensor.DataPacket.Num(), LidarComponent->Sensor.PacketSize, DataToSend.Num());
 
-  UdpScanComponent->EmitBytes(LidarComponent->Sensor.DataPacket);
+  UdpScanComponent->EmitBytes(DataToSend);
 }
 
 void AOusterLidarActor::ConfigureUDPScan()
@@ -103,5 +127,5 @@ void AOusterLidarActor::ConfigureUDPScan()
   UdpScanComponent->Settings.ReceiveIP = LidarComponent->SensorIP;
   UdpScanComponent->Settings.SendPort  = LidarComponent->ScanPort;
   UdpScanComponent->Settings.SendSocketName = FString(TEXT("ue5-scan-send"));
-  UdpScanComponent->Settings.BufferSize = LidarComponent->Sensor.PacketSize;
+  UdpScanComponent->Settings.BufferSize = 20;
 }

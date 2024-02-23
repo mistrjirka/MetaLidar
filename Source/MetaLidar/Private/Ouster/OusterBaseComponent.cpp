@@ -22,6 +22,7 @@ UOusterBaseComponent::UOusterBaseComponent() {
   ScanPort = 2368;
   PositionPort = 8308;
   NoiseStd = 1.0f;
+  PacketSeq = 0;
 }
 
 // Called when the game starts
@@ -62,8 +63,8 @@ UOusterBaseComponent::CalculatePointStep(const TArray<PointField> &fields) {
   uint32_t pointStep = 0;
   UE_LOG(LogTemp, Warning, TEXT("Fields: %d"), fields.Num());
   for (int i = 0; i < fields.Num(); i++) {
-    UE_LOG(LogTemp, Warning, TEXT("Field: %d"), fields[i].datatype);
-    UE_LOG(LogTemp, Warning, TEXT("Field: %d"), GetDataTypeSize(fields[i].datatype));
+    //UE_LOG(LogTemp, Warning, TEXT("Field: %d"), fields[i].datatype);
+    //UE_LOG(LogTemp, Warning, TEXT("Field: %d"), GetDataTypeSize(fields[i].datatype));
     pointStep += GetDataTypeSize(fields[i].datatype) * fields[i].count;
   }
   return pointStep;
@@ -106,18 +107,18 @@ void UOusterBaseComponent::ConfigureOusterSensor() {
     Sensor.VerticalResolution = 128;
     Sensor.SamplingRate = SRO10;
     Sensor.HorizontalResolution = 2048;
-    Sensor.fields = {PointField('x', 0, PointField::FLOAT32, 1),
-                     PointField('y', 4,  PointField::FLOAT32, 1),
-                     PointField('z', 8, PointField::FLOAT32, 1),
-                     PointField('i', 12, PointField::FLOAT32, 1)};
+    Sensor.fields.Add(PointField(FString(TEXT("x")), 0, PointField::FLOAT32, 1));
+    Sensor.fields.Add(PointField(FString(TEXT("y")), 4, PointField::FLOAT32, 1));
+    Sensor.fields.Add(PointField(FString(TEXT("z")), 8, PointField::FLOAT32, 1));
+    Sensor.fields.Add(PointField(FString(TEXT("i")), 12, PointField::FLOAT32, 1));;
     Sensor.PointStep = this->CalculatePointStep(Sensor.fields);
-    UE_LOG(LogTemp, Warning, TEXT("PointStep: %d"), Sensor.PointStep);
+    //UE_LOG(LogTemp, Warning, TEXT("PointStep: %d"), Sensor.PointStep);
     Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep;
     Sensor.MinRange = 80.0f;
     Sensor.MaxRange = 12000.0f;
-    Sensor.PacketSize = sizeof(PointCloud2) + Sensor.HorizontalResolution *
+    Sensor.PacketSize = FMath::FloorToInt((float)(1.5f*(sizeof(PointCloud2) + Sensor.HorizontalResolution *
                                                   Sensor.VerticalResolution *
-                                                  Sensor.PointStep;
+                                                  Sensor.PointStep))) ;
     break;
   }
   }
@@ -322,31 +323,52 @@ uint32 UOusterBaseComponent::GetTimestampMicroseconds() {
                   1000000); // sec -> microsec
 }
 
+void AddToTArray(TArray<uint8>& arr, uint64_t num, int numBytes) {
+    for (int i = 0; i < numBytes; ++i) {
+        arr.Add(num & 0xFF);
+        num >>= 8;
+    }
+}
+
+void AddStringToTArray(TArray<uint8>& arr, const FString& str) {
+    for (TCHAR c : str) {
+        arr.Add(c);
+    }
+}
+
 void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
+  Sensor.DataPacket.Empty();
   PointCloud2 ScanData;
+  ScanData.header.seq = PacketSeq++;
   ScanData.header.stamp = TimeStamp;
-  ScanData.header.frame_id = "Ouster";
+  ScanData.header.frame_id = FString(TEXT("Ouster"));
   ScanData.height = 1;
-  ScanData.width = Sensor.RecordedHits.Num();
   ScanData.fields = Sensor.fields;
   ScanData.is_bigendian = false;
   ScanData.point_step = Sensor.PointStep;
-  ScanData.row_step = Sensor.RecordedHits.Num();
   ScanData.is_dense = true;
   ScanData.numOfFields = Sensor.fields.Num();
   // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
   // Sensor.RecordedHits.Num());
+  TArray<uint8> DataToCopy;
+  uint32_t numOfPoints = 0;
 
+  //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
+   //      Sensor.RecordedHits.Num());
   for (int i = 0; i < Sensor.RecordedHits.Num(); i++) {
     if (!Sensor.RecordedHits[i].IsValidBlockingHit()) {
       continue;
     }
+    //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket in forloop: %d"), i);
+    numOfPoints++;
 
     FVector Location = Sensor.RecordedHits[i].Location;
     PointXYZI Point;
     Point.x = Location.X;
     Point.y = Location.Y;
     Point.z = Location.Z;
+
+    //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after location: %f"), Point.x);
 
     auto PhysMat = Sensor.RecordedHits[i].PhysMaterial;
     if (PhysMat != nullptr) {
@@ -359,16 +381,51 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
     unsigned char data[Sensor.PointStep];
     FMemory::Memcpy(data, &Point, Sensor.PointStep);
 
+    //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after memcpy: %d"), i);
+
     for (int j = 0; j < Sensor.PointStep; j++) {
-      ScanData.data.Add(data[j]);
+      //UE_LOG(LogTemp, Warning, TEXT("DataTo copy in forloop: %d"), j);
+      DataToCopy.Add(data[j]);
+
     }
   }
 
+  ScanData.width = numOfPoints;
+  ScanData.row_step = ScanData.width;
+
+
   uint32 DataPacketSize =
-      sizeof(PointCloud2) + ScanData.data.Num() * Sensor.PointStep;
+      sizeof(PointCloud2) + DataToCopy.Num() * sizeof(uint8);
   Sensor.DataPacket.Reserve(DataPacketSize);
-  char *dataToCopy = reinterpret_cast<char *>(&ScanData);
-  FMemory::Memcpy(Sensor.DataPacket.GetData(), dataToCopy, DataPacketSize);
+  
+  //add header
+  AddToTArray(Sensor.DataPacket, ScanData.header.seq, 4);
+  AddToTArray(Sensor.DataPacket, ScanData.header.stamp, 8);
+  AddToTArray(Sensor.DataPacket, ScanData.header.frame_id.Len(), 4);
+  AddStringToTArray(Sensor.DataPacket, ScanData.header.frame_id);
+  AddToTArray(Sensor.DataPacket, ScanData.height, 4);
+  AddToTArray(Sensor.DataPacket, ScanData.width, 4);
+  AddToTArray(Sensor.DataPacket, ScanData.numOfFields, 4);
+  //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"), ScanData.fields.Num());
+  
+ 
+  for (uint32 i = 0; i < ScanData.numOfFields; i++) {
+    //UE_LOG(LogTemp, Warning, TEXT("Adding fields: %d"), i);
+    AddToTArray(Sensor.DataPacket, i, 4);
+    AddStringToTArray(Sensor.DataPacket, ScanData.fields[i].name);
+    AddToTArray(Sensor.DataPacket, ScanData.fields[i].offset, 4);
+    AddToTArray(Sensor.DataPacket, ScanData.fields[i].datatype, 4);
+    AddToTArray(Sensor.DataPacket, ScanData.fields[i].count, 4);
+  }
+  AddToTArray(Sensor.DataPacket, ScanData.is_bigendian, 1);
+  AddToTArray(Sensor.DataPacket, ScanData.point_step, 4);
+  AddToTArray(Sensor.DataPacket, ScanData.row_step, 4);
+
+  //add data
+  for (uint32 i = 0; i < DataToCopy.Num(); i++) {
+    Sensor.DataPacket.Add(DataToCopy[i]);
+  }
+  AddToTArray(Sensor.DataPacket, ScanData.is_dense, 0);
 }
 
 FString UOusterBaseComponent::DecToHex(int DecimalNumber) {

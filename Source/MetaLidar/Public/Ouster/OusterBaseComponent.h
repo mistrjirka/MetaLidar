@@ -7,8 +7,6 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Physics/PhysicsInterfaceCore.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
-#include <cstdint>
-#include <string>
 #include "OusterBaseComponent.generated.h"
 
 
@@ -19,12 +17,12 @@ class PacketGenerationTask;
 typedef struct Header {
   uint32 seq;         // sequence ID
   double stamp;         // timestamp in seconds
-  std::string frame_id; // frame ID in which the data is observed
+  FString frame_id; // frame ID in which the data is observed
 } Header;
 
 // Data structure for a single field in PointCloud2
 typedef struct PointField {
-  char name; // Name of the field (e.g., x, y, z, intensity)
+  FString name; // Name of the field (e.g., x, y, z, intensity)
   uint32 offset;  // Offset from the start of the point struct
   uint8 datatype; // Data type of the elements (e.g., FLOAT32, UINT8)
   uint32
@@ -39,6 +37,9 @@ typedef struct PointField {
   static const uint8 UINT32 = 6;
   static const uint8 FLOAT32 = 7;
   static const uint8 FLOAT64 = 8;
+
+  PointField(FString name, uint32 offset, uint8 datatype, uint32 count)
+    : name(name), offset(offset), datatype(datatype), count(count) {}
 } PointField;
 
 // The PointCloud2 message structure
@@ -137,6 +138,8 @@ public:
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ouster")
   float NoiseStd;
+
+  uint32 PacketSeq;
 
   FOusterLidar Sensor;
 

@@ -1,27 +1,26 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 using UnrealBuildTool;
-
+using System.IO;
 public class MetaLidar : ModuleRules
 {
 	public MetaLidar(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
-		
+		AddEngineThirdPartyPrivateStaticDependencies(Target, "zlib");
+		// Path to the root directory of PCL
+		//PublicDependencyModuleNames.Add("PCL");
+
 		PublicIncludePaths.AddRange(
-			new string[] {
-				// ... add public include paths required here ...
-			}
-			);
-				
-		
-		PrivateIncludePaths.AddRange(
-			new string[] {
-				// ... add other private include paths required here ...
-			}
-			);
-			
-		
+			new string[]
+			{}
+		);
+
+		PublicAdditionalLibraries.AddRange(
+			new string[]
+			{}
+		);
+
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
@@ -29,21 +28,21 @@ public class MetaLidar : ModuleRules
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
-			
-		
+
+
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
 				"Core",
 				"CoreUObject",
 				"Engine",
-				"PhysicsCore",				
+				"PhysicsCore",
 				"UDPWrapper",
-				"Projects"	
+				"Projects"
 			}
 			);
-		
-		
+
+
 		DynamicallyLoadedModuleNames.AddRange(
 			new string[]
 			{
