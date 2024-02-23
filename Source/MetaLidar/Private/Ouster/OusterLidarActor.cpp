@@ -125,7 +125,7 @@ void AOusterLidarActor::ConfigureUDPScan()
 {
   UdpScanComponent->Settings.SendIP    = LidarComponent->DestinationIP;
   UdpScanComponent->Settings.ReceiveIP = LidarComponent->SensorIP;
-  UdpScanComponent->Settings.SendPort  = LidarComponent->ScanPort;
+  UdpScanComponent->Settings.SendPort  = 11021;
   UdpScanComponent->Settings.SendSocketName = FString(TEXT("ue5-scan-send"));
   UdpScanComponent->Settings.BufferSize = 20;
 }

@@ -254,7 +254,7 @@ void UOusterBaseComponent::GetScanData() {
                                Sensor.HorizontalResolution);
 
   // Calculate batch size for 'ParallelFor' based on workable thread
-  const int ThreadNum = 1 /*FPlatformMisc::NumberOfWorkerThreadsToSpawn()*/;
+  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn()-2, 1)  ;
 
   // Divide work across threads, each thread processes a portion of all hits
   // (vertically and horizontally)
