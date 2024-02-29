@@ -7,7 +7,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 
-#define SHM_NAME "/my_shm"
 #define SHM_SIZE 4096
 
 class SharedMemory {

@@ -4,7 +4,8 @@
 #include "Logging/LogMacros.h"
 
 // Sets default values for this component's properties
-UOusterBaseComponent::UOusterBaseComponent() {
+UOusterBaseComponent::UOusterBaseComponent()
+{
   // Set this component to be initialized when the game starts, and to be ticked
   // every frame.  You can turn these features off to improve performance if you
   // don't need them.
@@ -22,11 +23,14 @@ UOusterBaseComponent::UOusterBaseComponent() {
   ScanPort = 2368;
   PositionPort = 8308;
   NoiseStd = 1.0f;
+  NoiseFrequency = 60.0f;
+  NoiseFrequency = 1.0f;
   PacketSeq = 0;
 }
 
 // Called when the game starts
-void UOusterBaseComponent::BeginPlay() {
+void UOusterBaseComponent::BeginPlay()
+{
   Super::BeginPlay();
   FString TheFloatStr = FString::SanitizeFloat(NoiseStd);
   UE_LOG(LogTemp, Warning, TEXT("%s"), *TheFloatStr);
@@ -35,126 +39,129 @@ void UOusterBaseComponent::BeginPlay() {
 }
 
 // Function to get the size of the data type in bytes
-uint32_t UOusterBaseComponent::GetDataTypeSize(uint8 type) {
-  switch (type) {
-  case PointField::INT8:
-    return 1;
-  case PointField::UINT8:
-    return 1;
-  case PointField::INT16:
-    return 2;
-  case PointField::UINT16:
-    return 2;
-  case PointField::INT32:
-    return 4;
-  case PointField::UINT32:
-    return 4;
-  case PointField::FLOAT32:
-    return 4;
-  case PointField::FLOAT64:
-    return 8;
-  default:
-    return 0; // Should never be reached
+uint32_t UOusterBaseComponent::GetDataTypeSize(uint8 type)
+{
+  switch (type)
+  {
+    case PointField::INT8:
+      return 1;
+    case PointField::UINT8:
+      return 1;
+    case PointField::INT16:
+      return 2;
+    case PointField::UINT16:
+      return 2;
+    case PointField::INT32:
+      return 4;
+    case PointField::UINT32:
+      return 4;
+    case PointField::FLOAT32:
+      return 4;
+    case PointField::FLOAT64:
+      return 8;
+    default:
+      return 0;  // Should never be reached
   }
 }
 
-uint32_t
-UOusterBaseComponent::CalculatePointStep(const TArray<PointField> &fields) {
+uint32_t UOusterBaseComponent::CalculatePointStep(const TArray<PointField>& fields)
+{
   uint32_t pointStep = 0;
-  for (int i = 0; i < fields.Num(); i++) {
-    //UE_LOG(LogTemp, Warning, TEXT("Field: %d"), fields[i].datatype);
-    //UE_LOG(LogTemp, Warning, TEXT("Field: %d"), GetDataTypeSize(fields[i].datatype));
+  for (int i = 0; i < fields.Num(); i++)
+  {
+    // UE_LOG(LogTemp, Warning, TEXT("Field: %d"), fields[i].datatype);
+    // UE_LOG(LogTemp, Warning, TEXT("Field: %d"), GetDataTypeSize(fields[i].datatype));
     pointStep += GetDataTypeSize(fields[i].datatype) * fields[i].count;
   }
   return pointStep;
 }
 
 // Called every frame
-void UOusterBaseComponent::TickComponent(
-    float DeltaTime, ELevelTick TickType,
-    FActorComponentTickFunction *ThisTickFunction) {
+void UOusterBaseComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+                                         FActorComponentTickFunction* ThisTickFunction)
+{
   Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
 
-void UOusterBaseComponent::EndPlay(EEndPlayReason::Type Reason) {
-
+void UOusterBaseComponent::EndPlay(EEndPlayReason::Type Reason)
+{
   FString TheFloatStr = FString::SanitizeFloat(NoiseStd);
   UE_LOG(LogTemp, Warning, TEXT("%s"), *TheFloatStr);
   Super::EndPlay(Reason);
 }
 
-void UOusterBaseComponent::ConfigureOusterSensor() {
-  switch (SensorModel.GetValue()) {
-  case 0: { // OS1
-    float Elevation[] = {
-         -22.5f, -22.1f, -21.8f, -21.4f, -21.1f, -20.7f, -20.4f, -20.0f, -19.7f,
-        -19.3f, -19.0f, -18.6f, -18.2f, -17.9f, -17.5f, -17.2f, -16.8f, -16.5f,
-        -16.1f, -15.8f, -15.4f, -15.1f, -14.7f, -14.4f, -14.0f, -13.6f, -13.3f,
-        -12.9f, -12.6f, -12.2f, -11.9f, -11.5f, -11.2f, -10.8f, -10.5f, -10.1f,
-        -9.7f,  -9.4f,  -9.0f,  -8.7f,  -8.3f,  -8.0f,  -7.6f,  -7.3f,  -6.9f,
-        -6.6f,  -6.2f,  -5.8f,  -5.5f,  -5.1f,  -4.8f,  -4.4f,  -4.1f,  -3.7f,
-        -3.4f,  -3.0f,  -2.7f,  -2.3f,  -1.9f,  -1.6f,  -1.2f,  -0.9f,  -0.5f, 
-        -0.2f,  0.2f,   0.5f,   0.9f,   1.2f,   1.6f,   1.9f,   2.3f,   2.7f,
-        3.0f,   3.4f,   3.7f,   4.1f,   4.4f,   4.8f,   5.1f,   5.5f,   5.8f,
-        6.2f,   6.6f,   6.9f,   7.3f,   7.6f,   8.0f,   8.3f,   8.7f,   9.0f,
-        9.4f,   9.7f,   10.1f,  10.5f,  10.8f,  11.2f,  11.5f,  11.9f,  12.2f,
-        12.6f,  12.9f,  13.3f,  13.6f,  14.0f,  14.4f,  14.7f,  15.1f,  15.4f,
-        15.8f,  16.1f,  16.5f,  16.8f,  17.2f,  17.5f,  17.9f,  18.2f,  18.6f,
-        19.0f,  19.3f,  19.7f,  20.0f,  20.4f,  20.7f,  21.1f,  21.4f,  21.8f,
-        22.1f,  22.5f};
-    Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
-    Sensor.VerticalResolution = 128;
-    Sensor.SamplingRate = EOusterFrequency::SRO05;
-    Sensor.HorizontalResolution = 2048;
-    Sensor.fields.Add(PointField(FString(TEXT("x")), 0, PointField::FLOAT32, 1));
-    Sensor.fields.Add(PointField(FString(TEXT("y")), 4, PointField::FLOAT32, 1));
-    Sensor.fields.Add(PointField(FString(TEXT("z")), 8, PointField::FLOAT32, 1));
-    Sensor.fields.Add(PointField(FString(TEXT("i")), 12, PointField::FLOAT32, 1));;
-    Sensor.PointStep = this->CalculatePointStep(Sensor.fields);
-    //UE_LOG(LogTemp, Warning, TEXT("PointStep: %d"), Sensor.PointStep);
-    Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep;
-    Sensor.MinRange = 80.0f;
-    Sensor.MaxRange = 12000.0f;
-    Sensor.PacketSize = FMath::FloorToInt((float)(1.5f*(sizeof(PointCloud2) + Sensor.HorizontalResolution *
-                                                  Sensor.VerticalResolution *
-                                                  Sensor.PointStep))) ;
-    break;
-  }
-  }
-
-  switch (SamplingRate.GetValue()) {
-  case 0:
-    Sensor.SamplingRate = 5;
-    break;
-  case 1:
-    Sensor.SamplingRate = 10;
-    break;
-  case 2:
-    Sensor.SamplingRate = 15;
-    break;
-  case 3:
-    Sensor.SamplingRate = 20;
-    break;
-  default:
-    Sensor.SamplingRate = 10;
-    break;
+void UOusterBaseComponent::ConfigureOusterSensor()
+{
+  switch (SensorModel.GetValue())
+  {
+    case 0: {  // OS1
+      float Elevation[] = { -22.5f, -22.1f, -21.8f, -21.4f, -21.1f, -20.7f, -20.4f, -20.0f, -19.7f, -19.3f, -19.0f,
+                            -18.6f, -18.2f, -17.9f, -17.5f, -17.2f, -16.8f, -16.5f, -16.1f, -15.8f, -15.4f, -15.1f,
+                            -14.7f, -14.4f, -14.0f, -13.6f, -13.3f, -12.9f, -12.6f, -12.2f, -11.9f, -11.5f, -11.2f,
+                            -10.8f, -10.5f, -10.1f, -9.7f,  -9.4f,  -9.0f,  -8.7f,  -8.3f,  -8.0f,  -7.6f,  -7.3f,
+                            -6.9f,  -6.6f,  -6.2f,  -5.8f,  -5.5f,  -5.1f,  -4.8f,  -4.4f,  -4.1f,  -3.7f,  -3.4f,
+                            -3.0f,  -2.7f,  -2.3f,  -1.9f,  -1.6f,  -1.2f,  -0.9f,  -0.5f,  -0.2f,  0.2f,   0.5f,
+                            0.9f,   1.2f,   1.6f,   1.9f,   2.3f,   2.7f,   3.0f,   3.4f,   3.7f,   4.1f,   4.4f,
+                            4.8f,   5.1f,   5.5f,   5.8f,   6.2f,   6.6f,   6.9f,   7.3f,   7.6f,   8.0f,   8.3f,
+                            8.7f,   9.0f,   9.4f,   9.7f,   10.1f,  10.5f,  10.8f,  11.2f,  11.5f,  11.9f,  12.2f,
+                            12.6f,  12.9f,  13.3f,  13.6f,  14.0f,  14.4f,  14.7f,  15.1f,  15.4f,  15.8f,  16.1f,
+                            16.5f,  16.8f,  17.2f,  17.5f,  17.9f,  18.2f,  18.6f,  19.0f,  19.3f,  19.7f,  20.0f,
+                            20.4f,  20.7f,  21.1f,  21.4f,  21.8f,  22.1f,  22.5f };
+      Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
+      Sensor.VerticalResolution = 128;
+      Sensor.SamplingRate = EOusterFrequency::SRO05;
+      Sensor.HorizontalResolution = 2048;
+      Sensor.fields.Add(PointField(FString(TEXT("x")), 0, PointField::FLOAT32, 1));
+      Sensor.fields.Add(PointField(FString(TEXT("y")), 4, PointField::FLOAT32, 1));
+      Sensor.fields.Add(PointField(FString(TEXT("z")), 8, PointField::FLOAT32, 1));
+      Sensor.fields.Add(PointField(FString(TEXT("i")), 12, PointField::FLOAT32, 1));
+      ;
+      Sensor.PointStep = this->CalculatePointStep(Sensor.fields);
+      // UE_LOG(LogTemp, Warning, TEXT("PointStep: %d"), Sensor.PointStep);
+      Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep;
+      Sensor.MinRange = 80.0f;
+      Sensor.MaxRange = 12000.0f;
+      Sensor.PacketSize =
+          FMath::FloorToInt((float)(1.5f * (sizeof(PointCloud2) + Sensor.HorizontalResolution *
+                                                                      Sensor.VerticalResolution * Sensor.PointStep)));
+      break;
+    }
   }
 
-  switch (ReturnMode.GetValue()) {
-  case 0:
-    Sensor.ReturnMode = 55;
-    break;
-  case 1: // Last Return : Not implemented
-    Sensor.ReturnMode = 56;
-    break;
-  case 2: // Dual Return : Not implemented
-    Sensor.ReturnMode = 57;
-    break;
+  switch (SamplingRate.GetValue())
+  {
+    case 0:
+      Sensor.SamplingRate = 5;
+      break;
+    case 1:
+      Sensor.SamplingRate = 10;
+      break;
+    case 2:
+      Sensor.SamplingRate = 15;
+      break;
+    case 3:
+      Sensor.SamplingRate = 20;
+      break;
+    default:
+      Sensor.SamplingRate = 10;
+      break;
+  }
+
+  switch (ReturnMode.GetValue())
+  {
+    case 0:
+      Sensor.ReturnMode = 55;
+      break;
+    case 1:  // Last Return : Not implemented
+      Sensor.ReturnMode = 56;
+      break;
+    case 2:  // Dual Return : Not implemented
+      Sensor.ReturnMode = 57;
+      break;
   }
 
   // Initialize raycast vector and azimuth vector
-  Sensor.AzimuthAngle.Init(90.f, this->Sensor.VerticalResolution *
-                                     this->Sensor.HorizontalResolution);
+  Sensor.AzimuthAngle.Init(90.f, this->Sensor.VerticalResolution * this->Sensor.HorizontalResolution);
 
   // Sensor.DataPacket.AddUninitialized(DATA_PACKET_PAYLOAD);
 }
@@ -185,42 +192,64 @@ void UOusterBaseComponent::ConfigureOusterSensor() {
 // laser is shot skyward, both distance and
 //        reflectivity values will be 0. The key is a distance of 0, because 0
 //        is a valid reflectivity value (i.e. one step above noise).
-uint8 UOusterBaseComponent::GetIntensity(const FString Surface,
-                                         const float Distance) const {
+uint8 UOusterBaseComponent::GetIntensity(const FString Surface, const float Distance) const
+{
   uint8 MaxReflectivity = 0;
   uint8 MinReflectivity = 0;
 
-  if (Surface.Contains(TEXT("PM_Reflectivity_"), ESearchCase::CaseSensitive)) {
+  if (Surface.Contains(TEXT("PM_Reflectivity_"), ESearchCase::CaseSensitive))
+  {
     // https://docs.unrealengine.com/5.0/en-US/API/Runtime/Core/Containers/FString/RightChop/1/
     MaxReflectivity = (uint8)FCString::Atoi(*Surface.RightChop(16));
-    if (MaxReflectivity > 100) {
+    if (MaxReflectivity > 100)
+    {
       MinReflectivity = 101;
     }
-  } else { // Default PhysicalMaterial value, in case of the PhysicalMaterial is
-           // not applied
+  }
+  else
+  {  // Default PhysicalMaterial value, in case of the PhysicalMaterial is
+     // not applied
     MaxReflectivity = 20;
   }
 
-  return (uint8)((MinReflectivity - MaxReflectivity) /
-                     (Sensor.MaxRange - Sensor.MinRange) * Distance +
+  return (uint8)((MinReflectivity - MaxReflectivity) / (Sensor.MaxRange - Sensor.MinRange) * Distance +
                  MaxReflectivity);
 }
 
-float UOusterBaseComponent::GenerateGaussianNoise(float mean, float stdDev) {
+float UOusterBaseComponent::GenerateGaussianNoise(float mean, float stdDev)
+{
   float u1 = FMath::RandRange(0.f, 1.f);
   float u2 = FMath::RandRange(0.f, 1.f);
   float randStdNormal =
-      FMath::Sqrt(-2.0f * FMath::Loge(u1)) *
-      FMath::Sin(2.0f * PI * u2); // applying Box-Muller transform
+      FMath::Sqrt(-2.0f * FMath::Loge(u1)) * FMath::Sin(2.0f * PI * u2);  // applying Box-Muller transform
   return mean + stdDev * randStdNormal;
 }
 
-float UOusterBaseComponent::GetNoiseValue(FHitResult result) {
+// Function to generate 3D noise based on a normal distribution
+FVector Generate3DNoise(float StandardDeviation) {
+    // Static is used here for efficiency, so the engine is only constructed once.
+    static std::default_random_engine Generator;
+
+    // Normal distribution centered at 0 with the given standard deviation
+    std::normal_distribution<float> Distribution(0.0f, StandardDeviation);
+
+    // Generate the noise components
+    float NoiseX = Distribution(Generator);
+    float NoiseY = Distribution(Generator);
+    float NoiseZ = Distribution(Generator);
+
+    // Return the noise vector
+    return FVector(NoiseX, NoiseY, NoiseZ);
+}
+
+float UOusterBaseComponent::GetNoiseValue(FHitResult result)
+{
   uint8 intensity = 255;
 
   auto PhysMat = result.PhysMaterial;
 
-  if (PhysMat != nullptr) {
+  if (PhysMat != nullptr)
+  {
     intensity = GetIntensity(*PhysMat->GetName(), (result.Distance * 2) / 10);
   }
 
@@ -235,11 +264,46 @@ float UOusterBaseComponent::GetNoiseValue(FHitResult result) {
 
   return Noise;
 }
+// Function to calculate rotation noise based on azimuth, frequency, amplitude, and current time
+FRotator CalculateRotationNoise(float Azimuth, float Frequency, float Amplitude, float CurrentTime) {
+    // Convert azimuth to a rotational component (here, we'll apply it to yaw for demonstration)
+    float YawNoise = FMath::Sin(CurrentTime * Frequency) * Amplitude;
 
-void UOusterBaseComponent::GetScanData() {
+    // Assuming you want the noise to affect the yaw based on the azimuth
+    // If you want to include pitch and roll variations, you could apply similar calculations
+    float PitchNoise = 0.0f; // For simplicity, not applying noise here
+    float RollNoise = 0.0f;  // For simplicity, not applying noise here
+
+    // Create the noise rotation
+    FRotator NoiseRotation = FRotator(PitchNoise, YawNoise, RollNoise);
+
+    return NoiseRotation;
+}
+// Function to calculate noise vector based on azimuth, frequency, and amplitude
+FVector CalculateNoise(float Azimuth, float Frequency, float Amplitude, float CurrentTime)
+{
+  // Convert azimuth to radians
+  float AzimuthInRadians = FMath::DegreesToRadians(Azimuth);
+
+  // Calculate horizontal direction based on azimuth
+  FVector HorizontalDirection = FVector(FMath::Cos(AzimuthInRadians), FMath::Sin(AzimuthInRadians), 0.0f);
+
+  // Use a sinusoidal function to simulate vertical vibration
+  float VerticalMovement = FMath::Sin(CurrentTime * Frequency) * Amplitude;
+
+  // Apply amplitude to horizontal direction to scale the effect
+  FVector ScaledHorizontalDirection = HorizontalDirection * Amplitude;
+
+  // Add the vertical movement to the Z component of the horizontal direction
+  FVector NoiseVector = ScaledHorizontalDirection + FVector(0.0f, 0.0f, VerticalMovement);
+
+  return NoiseVector;
+}
+
+void UOusterBaseComponent::GetScanData()
+{
   // complex collisions: true
-  FCollisionQueryParams TraceParams =
-      FCollisionQueryParams(TEXT("LaserTrace"), true, GetOwner());
+  FCollisionQueryParams TraceParams = FCollisionQueryParams(TEXT("LaserTrace"), true, GetOwner());
   TraceParams.bReturnPhysicalMaterial = true;
   TraceParams.bTraceComplex = true;
 
@@ -248,67 +312,66 @@ void UOusterBaseComponent::GetScanData() {
   FRotator LidarRotation = this->GetActorRotation();
 
   // Initialize array for raycast result
-  Sensor.RecordedHits.Init(FHitResult(ForceInit),
-                           Sensor.VerticalResolution *
-                               Sensor.HorizontalResolution);
+  Sensor.RecordedHits.Init(FHitResult(ForceInit), Sensor.VerticalResolution * Sensor.HorizontalResolution);
 
   // Calculate batch size for 'ParallelFor' based on workable thread
-  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn()-4, 1);
+  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() - 4, 1);
 
   // Divide work across threads, each thread processes a portion of all hits
   // (vertically and horizontally)
-  const int DivideEnd =
-      FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNum));
+  const int DivideEnd = FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNum));
   int count = 0;
 
   float horizontalStepAngle = (float)(360.f / (float)Sensor.HorizontalResolution);
-  //UE_LOG(LogTemp, Warning, TEXT("Horizontal Step Angle: %f"), horizontalStepAngle);
+  // UE_LOG(LogTemp, Warning, TEXT("Horizontal Step Angle: %f"), horizontalStepAngle);
+
   ParallelFor(
       ThreadNum,
       [&](int32 PFIndex) {
         // divide work acrosss threads. Each thread will process a portion of
         // the hits.
         int StartAt = PFIndex * DivideEnd;
-        if (StartAt >= Sensor.RecordedHits.Num()) {
+        if (StartAt >= Sensor.RecordedHits.Num())
+        {
           return;
         }
 
         int EndAt = StartAt + DivideEnd;
-        if (PFIndex == (ThreadNum - 1)) {
+        if (PFIndex == (ThreadNum - 1))
+        {
           EndAt = Sensor.RecordedHits.Num();
         }
 
-        for (int32 Index = StartAt; Index < EndAt; ++Index) {
-          float Azimuth =
-              horizontalStepAngle *
-              FMath::FloorToInt((float)(Index / Sensor.VerticalResolution));
-          float Elevation =
-              Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
+        for (int32 Index = StartAt; Index < EndAt; ++Index)
+        {
+          float Azimuth = horizontalStepAngle * FMath::FloorToInt((float)(Index / Sensor.VerticalResolution));
+          float Elevation = Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
 
           /*if(count++%50 == 0)
             UE_LOG(LogTemp, Warning, TEXT("Azimuth: %f, Elevation: %f"), Azimuth, Elevation);*/
 
           FRotator LaserRotation(0.f, 0.f, 0.f);
+
           LaserRotation.Add(Elevation, Azimuth, 0.f);
 
-          
-          FRotator Rotation =
-              UKismetMathLibrary::ComposeRotators(LaserRotation, LidarRotation);
+          FRotator Rotation = UKismetMathLibrary::ComposeRotators(LaserRotation, LidarRotation);
 
-          FVector BeginPoint =
-              LidarPosition +
-              Sensor.MinRange * UKismetMathLibrary::GetForwardVector(Rotation);
-          FVector EndPoint =
-              LidarPosition +
-              Sensor.MaxRange * UKismetMathLibrary::GetForwardVector(Rotation);
+          FRotator noise = CalculateRotationNoise(Azimuth, NoiseFrequency, NoiseAmplitude, GetWorld()->GetTimeSeconds());
+          FQuat Quat = FQuat(noise);
+          FQuat Quat2 = FQuat(Rotation);
+          FQuat NoiseCombined = Quat * Quat2;
+          Rotation = NoiseCombined.Rotator();
+
+          FVector BeginPoint = LidarPosition + Sensor.MinRange * UKismetMathLibrary::GetForwardVector(Rotation);
+          FVector EndPoint = LidarPosition + Sensor.MaxRange * UKismetMathLibrary::GetForwardVector(Rotation);
 
           FHitResult result;
-          GetWorld()->LineTraceSingleByChannel(
-              result, BeginPoint, EndPoint, ECC_Visibility, TraceParams,
-              FCollisionResponseParams::DefaultResponseParam);
+          GetWorld()->LineTraceSingleByChannel(result, BeginPoint, EndPoint, ECC_Visibility, TraceParams,
+                                               FCollisionResponseParams::DefaultResponseParam);
 
-          if (result.IsValidBlockingHit()) {
-            //result.Distance += GetNoiseValue(result);
+          if (result.IsValidBlockingHit())
+          {
+            result.Location += Generate3DNoise(NoiseStd);
           }
 
           Sensor.RecordedHits[Index] = result;
@@ -317,33 +380,40 @@ void UOusterBaseComponent::GetScanData() {
       !SupportMultithread);
 }
 
-FVector UOusterBaseComponent::GetActorLocation() {
+FVector UOusterBaseComponent::GetActorLocation()
+{
   return GetOwner()->GetActorLocation();
 }
 
-FRotator UOusterBaseComponent::GetActorRotation() {
+FRotator UOusterBaseComponent::GetActorRotation()
+{
   return GetOwner()->GetActorRotation();
 }
 
-uint32 UOusterBaseComponent::GetTimestampMicroseconds() {
-  return (uint32)(fmod(GetWorld()->GetTimeSeconds(), 3600.f) *
-                  1000000); // sec -> microsec
+uint32 UOusterBaseComponent::GetTimestampMicroseconds()
+{
+  return (uint32)(fmod(GetWorld()->GetTimeSeconds(), 3600.f) * 1000000);  // sec -> microsec
 }
 
-void AddToTArray(TArray<uint8>& arr, uint64_t num, int numBytes) {
-    for (int i = 0; i < numBytes; ++i) {
-        arr.Add(num & 0xFF);
-        num >>= 8;
-    }
+void AddToTArray(TArray<uint8>& arr, uint64_t num, int numBytes)
+{
+  for (int i = 0; i < numBytes; ++i)
+  {
+    arr.Add(num & 0xFF);
+    num >>= 8;
+  }
 }
 
-void AddStringToTArray(TArray<uint8>& arr, const FString& str) {
-    for (TCHAR c : str) {
-        arr.Add(c);
-    }
+void AddStringToTArray(TArray<uint8>& arr, const FString& str)
+{
+  for (TCHAR c : str)
+  {
+    arr.Add(c);
+  }
 }
 
-void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
+void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
+{
   Sensor.DataPacket.Empty();
   PointCloud2 ScanData;
   ScanData.header.seq = PacketSeq++;
@@ -360,63 +430,61 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
   TArray<uint8> DataToCopy;
   uint32_t numOfPoints = 0;
 
-  //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
-   //      Sensor.RecordedHits.Num());
+  // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
+  //      Sensor.RecordedHits.Num());
   AActor* Owner = GetOwner();
 
-  for (int i = 0; i < Sensor.RecordedHits.Num(); i++) {
-    if (!Sensor.RecordedHits[i].IsValidBlockingHit()) {
+  for (int i = 0; i < Sensor.RecordedHits.Num(); i++)
+  {
+    if (!Sensor.RecordedHits[i].IsValidBlockingHit())
+    {
       continue;
     }
-    //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket in forloop: %d"), i);
+    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket in forloop: %d"), i);
     numOfPoints++;
 
     FVector Location = Sensor.RecordedHits[i].Location;
-    //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
+    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
     FVector RelativeLocation = Owner->GetTransform().InverseTransformPosition(Location);
-    FRotator rotation = FRotator(0.0f, 0.0f, 90.0f);; // Your rotation here
-
-    FQuat QuatRotation = FQuat(rotation);
 
     //   Rotate the point around the origin
-    FVector rotatedPoint = QuatRotation.RotateVector(RelativeLocation);
     PointXYZI Point;
-    Point.x = RelativeLocation.X;
-    Point.y = RelativeLocation.Y;
-    Point.z = RelativeLocation.Z; 
+    Point.x = RelativeLocation.X / 100.f;
+    Point.y = RelativeLocation.Y / 100.f;
+    Point.z = RelativeLocation.Z / 100.f;
 
-    //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after location: %f"), Point.x);
+    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after location: %f"), Point.x);
 
     auto PhysMat = Sensor.RecordedHits[i].PhysMaterial;
-    if (PhysMat != nullptr) {
-      Point.intensity = GetIntensity(
-          *PhysMat->GetName(), (Sensor.RecordedHits[i].Distance * 2) / 10);
-    } else {
+    if (PhysMat != nullptr)
+    {
+      Point.intensity = GetIntensity(*PhysMat->GetName(), (Sensor.RecordedHits[i].Distance * 2) / 10);
+    }
+    else
+    {
       Point.intensity = 0x00;
     }
 
     unsigned char data[Sensor.PointStep];
     FMemory::Memcpy(data, &Point, Sensor.PointStep);
 
-    //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after memcpy: %d"), i);
+    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after memcpy: %d"), i);
 
-    for (int j = 0; j < Sensor.PointStep; j++) {
-      //UE_LOG(LogTemp, Warning, TEXT("DataTo copy in forloop: %d"), j);
+    for (int j = 0; j < Sensor.PointStep; j++)
+    {
+      // UE_LOG(LogTemp, Warning, TEXT("DataTo copy in forloop: %d"), j);
       DataToCopy.Add(data[j]);
-
     }
   }
-  //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d numOfPoints %d"), DataToCopy.Num(), numOfPoints);
+  // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d numOfPoints %d"), DataToCopy.Num(), numOfPoints);
 
   ScanData.width = numOfPoints;
   ScanData.row_step = ScanData.width;
 
-
-  uint32 DataPacketSize =
-      sizeof(PointCloud2) + DataToCopy.Num() * sizeof(uint8);
+  uint32 DataPacketSize = sizeof(PointCloud2) + DataToCopy.Num() * sizeof(uint8);
   Sensor.DataPacket.Reserve(DataPacketSize);
-  //UE_LOG(LogTemp, Warning, TEXT("Seq_number: %d"), ScanData.header.seq);
-  //add header
+  // UE_LOG(LogTemp, Warning, TEXT("Seq_number: %d"), ScanData.header.seq);
+  // add header
   AddToTArray(Sensor.DataPacket, ScanData.header.seq, 4);
   AddToTArray(Sensor.DataPacket, ScanData.header.stamp, 8);
   AddToTArray(Sensor.DataPacket, ScanData.header.frame_id.Len(), 4);
@@ -424,16 +492,16 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
   AddToTArray(Sensor.DataPacket, ScanData.height, 4);
   AddToTArray(Sensor.DataPacket, ScanData.width, 4);
   AddToTArray(Sensor.DataPacket, ScanData.numOfFields, 4);
-  //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"), ScanData.fields.Num());
-  
- 
-  for (uint32 i = 0; i < ScanData.numOfFields; i++) {
-    //UE_LOG(LogTemp, Warning, TEXT("Adding fields: %d"), i);
-    //AddToTArray(Sensor.DataPacket, i, 4);
+  // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"), ScanData.fields.Num());
+
+  for (uint32 i = 0; i < ScanData.numOfFields; i++)
+  {
+    // UE_LOG(LogTemp, Warning, TEXT("Adding fields: %d"), i);
+    // AddToTArray(Sensor.DataPacket, i, 4);
     AddToTArray(Sensor.DataPacket, ScanData.fields[i].name.Len(), 1);
-    //UE_LOG(LogTemp, Warning, TEXT("Adding fields: %d"), ScanData.fields[i].name.Len());
+    // UE_LOG(LogTemp, Warning, TEXT("Adding fields: %d"), ScanData.fields[i].name.Len());
     AddStringToTArray(Sensor.DataPacket, ScanData.fields[i].name);
-    //UE_LOG(LogTemp, Warning, TEXT("Adding fields: %s"), *ScanData.fields[i].name);
+    // UE_LOG(LogTemp, Warning, TEXT("Adding fields: %s"), *ScanData.fields[i].name);
     AddToTArray(Sensor.DataPacket, ScanData.fields[i].offset, 4);
     AddToTArray(Sensor.DataPacket, ScanData.fields[i].datatype, 1);
     AddToTArray(Sensor.DataPacket, ScanData.fields[i].count, 4);
@@ -442,20 +510,23 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
   AddToTArray(Sensor.DataPacket, ScanData.point_step, 4);
   AddToTArray(Sensor.DataPacket, ScanData.row_step, 4);
 
-  //add data
-  for (uint32 i = 0; i < DataToCopy.Num(); i++) {
+  // add data
+  for (uint32 i = 0; i < DataToCopy.Num(); i++)
+  {
     Sensor.DataPacket.Add(DataToCopy[i]);
   }
   AddToTArray(Sensor.DataPacket, ScanData.is_dense, 1);
 }
 
-FString UOusterBaseComponent::DecToHex(int DecimalNumber) {
+FString UOusterBaseComponent::DecToHex(int DecimalNumber)
+{
   // char array to store hexadecimal number
   char HexaDeciNum[100];
 
   // counter for hexadecimal number array
   int i = 0;
-  while (DecimalNumber != 0) {
+  while (DecimalNumber != 0)
+  {
     // temporary variable to store remainder
     int Temp = 0;
 
@@ -463,10 +534,13 @@ FString UOusterBaseComponent::DecToHex(int DecimalNumber) {
     Temp = DecimalNumber % 16;
 
     // check if Temp < 10
-    if (Temp < 10) {
+    if (Temp < 10)
+    {
       HexaDeciNum[i] = Temp + 48;
       i++;
-    } else {
+    }
+    else
+    {
       HexaDeciNum[i] = Temp + 55;
       i++;
     }
@@ -477,20 +551,23 @@ FString UOusterBaseComponent::DecToHex(int DecimalNumber) {
   FString Answer;
 
   // printing hexadecimal number array in reverse order
-  for (int j = i - 1; j >= 0; j--) {
+  for (int j = i - 1; j >= 0; j--)
+  {
     Answer += HexaDeciNum[j];
   }
 
   return Answer;
 }
 
-void UOusterBaseComponent::ASCIItoHEX(FString Ascii, uint8 Hex[]) {
+void UOusterBaseComponent::ASCIItoHEX(FString Ascii, uint8 Hex[])
+{
   // Initialize final String
   FString StrHex = "";
 
   // Make a loop to iterate through
   // every character of ascii string
-  for (int i = 0; i < Ascii.Len(); i++) {
+  for (int i = 0; i < Ascii.Len(); i++)
+  {
     // Take a char from
     // position i of string
     // char ch = Ascii[i];
@@ -509,5 +586,5 @@ void UOusterBaseComponent::ASCIItoHEX(FString Ascii, uint8 Hex[]) {
   }
 
   // Return the final string hex
-  strcpy(reinterpret_cast<char *>(Hex), TCHAR_TO_ANSI(*StrHex));
+  strcpy(reinterpret_cast<char*>(Hex), TCHAR_TO_ANSI(*StrHex));
 }

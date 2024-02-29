@@ -7,6 +7,7 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Physics/PhysicsInterfaceCore.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
+#include <random>
 #include "OusterBaseComponent.generated.h"
 
 
@@ -138,6 +139,13 @@ public:
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ouster")
   float NoiseStd;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ouster")
+  float NoiseFrequency;
+
+  UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ouster")
+  float NoiseAmplitude;
+
 
   uint32 PacketSeq;
   uint32 MAX_PACKET_SIZE;

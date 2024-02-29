@@ -11,6 +11,9 @@
 
 
 #define MAX_PACKET_SIZE 65507-10
+#define INITIAL_MEMORY_SIZE 40000000
+#define SHM_NAME "/t07ySQdKFH_meta_lidar"
+
 typedef struct {
   uint32 seq;
   uint16 packet_number;
@@ -42,7 +45,7 @@ public:
 
 protected:
   TArray<TArray<uint8>> DataToSend;
-  std::unique_ptr<SharedMemory> shared_memory;
+  SharedMemory shared_memory{"/t07ySQdKFH_meta_lidar", 40000000};
   
   // Called when the game starts or when spawned
   virtual void BeginPlay() override;

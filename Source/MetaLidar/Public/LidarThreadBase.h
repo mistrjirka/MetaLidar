@@ -141,8 +141,7 @@ protected:
   FThreadSafeBool IsVerifiedSuspended;
   FThreadSafeBool HasStopped;
 
-  // Thread object. Control the thread using this, with operators like Kill and Suspend
-  FRunnableThread* Thread = nullptr;
+
 
   // Holds a flag indicating that the thread is stopping.
   bool bStopping;
@@ -150,5 +149,8 @@ protected:
 public:
   // Holds the amount of time to wait
   FTimespan ThreadSleepTime;
+
+    // Thread object. Control the thread using this, with operators like Kill and Suspend
+  FRunnableThread* Thread = nullptr;
 };
 
