@@ -53,6 +53,13 @@ void AOusterLidarActor::BeginPlay()
 
   LidarThread = new LidarThreadProcess(ThreadSleepTime,*UniqueThreadName, this);
 
+  this->shared_memory = std::make_unique<SharedMemory>("t07ySQdKFH_meta_lidar", sizeof(MemoryPacket));
+  MemoryPacket *packet = (MemoryPacket *)this->shared_memory->get_ptr();
+  packet->seq = 0;
+  packet->packet_size = 0;
+  pthread_mutex_init(&packet->mutex, NULL);
+  
+
   if(LidarThread)
   {
     LidarThread->Init();
@@ -88,30 +95,15 @@ void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason)
   Super::EndPlay(Reason);
 }
 
-void AOusterLidarActor::GenerateDataPacket(TArray<uint8> &wholePacket)
+void AOusterLidarActor::SendDataPacket(TArray<uint8> &wholePacket)
 {
-  uint32 usablePacketSize = MAX_PACKET_SIZE - sizeof(DividedPacket);
   uint32 packetSize = wholePacket.Num();
-  uint32 totalPackets = FMath::FloorToInt((float)packetSize / usablePacketSize) + 1;
-
-  for (uint32 i = 0; i < totalPackets; i++)
-  {
-    uint32 packetStart = i * usablePacketSize;
-    uint32 packetEnd = FMath::Min(packetStart + usablePacketSize, packetSize);
-    
-    DividedPacket packet;
-    packet.seq = LidarComponent->PacketSeq;
-    packet.packet_number = i;
-    packet.total_packets = totalPackets;
-
-    TArray<uint8> PacketData;
-    PacketData.Init(0, sizeof(DividedPacket) + (packetEnd - packetStart));
-    FMemory::Memcpy(PacketData.GetData(), &packet, sizeof(DividedPacket));
-    FMemory::Memcpy(PacketData.GetData() + sizeof(DividedPacket), LidarComponent->Sensor.DataPacket.GetData() + packetStart, packetEnd - packetStart);
-    
-    this->DataToSend.Add(PacketData);
-  }
-
+  size_t newSizeToAllocate = sizeof(MemoryPacket) + packetSize;
+  this->shared_memory->resize(newSizeToAllocate);
+  MemoryPacket *packet = (MemoryPacket *)this->shared_memory->get_ptr();
+  packet->seq++;
+  packet->packet_size = packetSize;
+  FMemory::Memcpy(packet->data, wholePacket.GetData(), packetSize);
 }
 
 // ! On Thread (not game thread)
@@ -143,21 +135,7 @@ void AOusterLidarActor::LidarThreadTick()
   LidarComponent->GetScanData();
 
   LidarComponent->GenerateDataPacket(PacketTimestamp);
-  this->GenerateDataPacket(LidarComponent->Sensor.DataPacket);
-  UE_LOG(LogTemp, Warning, TEXT("Packets waiting to be sent: %d"), DataToSend.Num());
-  while(this->DataToSend.Num() > 0)
-  {
-    UE_LOG(LogTemp, Warning, TEXT("Packet acctual size: %d Packet divided %d now sending %d"), LidarComponent->Sensor.DataPacket.Num(), DataToSend.Num(), this->DataToSend[0].Num());
-    UdpScanComponent->EmitBytes(this->DataToSend[0]);
-    this->DataToSend.RemoveAt(0);
-    FPlatformProcess::Sleep(0.01);
-
-  }
-  FPlatformProcess::Sleep(1.0);
-
-  //UE_LOG(LogTemp, Warning, TEXT("Packet acctual size: %d Packet Expected size %d Compressed %d"), LidarComponent->Sensor.DataPacket.Num(), LidarComponent->Sensor.PacketSize, DataToSend.Num());
-  //UE_LOG(LogTemp, Warning, TEXT("sending"));
-  //UdpScanComponent->EmitBytes(DataToSend);
+  this->SendDataPacket(LidarComponent->Sensor.DataPacket);
 }
 
 void AOusterLidarActor::ConfigureUDPScan()

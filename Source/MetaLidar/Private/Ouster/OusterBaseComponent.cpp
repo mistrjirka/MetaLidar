@@ -61,7 +61,6 @@ uint32_t UOusterBaseComponent::GetDataTypeSize(uint8 type) {
 uint32_t
 UOusterBaseComponent::CalculatePointStep(const TArray<PointField> &fields) {
   uint32_t pointStep = 0;
-  UE_LOG(LogTemp, Warning, TEXT("Fields: %d"), fields.Num());
   for (int i = 0; i < fields.Num(); i++) {
     //UE_LOG(LogTemp, Warning, TEXT("Field: %d"), fields[i].datatype);
     //UE_LOG(LogTemp, Warning, TEXT("Field: %d"), GetDataTypeSize(fields[i].datatype));
@@ -373,7 +372,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
     numOfPoints++;
 
     FVector Location = Sensor.RecordedHits[i].Location;
-    UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
+    //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
     FVector RelativeLocation = Owner->GetTransform().InverseTransformPosition(Location);
     FRotator rotation = FRotator(0.0f, 0.0f, 90.0f);; // Your rotation here
 

@@ -2,10 +2,13 @@
 
 #pragma once
 
+#include <pthread.h>
 #include "CoreMinimal.h"
 #include "Ouster/OusterBaseComponent.h"
+#include "SharedMemory/SharedMemory.h"
 #include "LidarBaseActor.h"
 #include "OusterLidarActor.generated.h"
+
 
 #define MAX_PACKET_SIZE 65507-10
 typedef struct {
@@ -14,6 +17,13 @@ typedef struct {
   uint16 total_packets; 
   uint8 data[];
 } DividedPacket;
+
+typedef struct {
+  pthread_mutex_t mutex;
+  uint32 seq;
+  size_t packet_size;
+  uint8 data[];
+} MemoryPacket;
 
 /**
  *
@@ -32,6 +42,7 @@ public:
 
 protected:
   TArray<TArray<uint8>> DataToSend;
+  std::unique_ptr<SharedMemory> shared_memory;
   
   // Called when the game starts or when spawned
   virtual void BeginPlay() override;
@@ -39,7 +50,7 @@ protected:
   // Called when the game end
   virtual void EndPlay(EEndPlayReason::Type Reason) override;
 
-  void GenerateDataPacket(TArray<uint8> &DataToSend);
+  void SendDataPacket(TArray<uint8> &DataToSend);
 
 
 public:
