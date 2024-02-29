@@ -7,6 +7,14 @@
 #include "LidarBaseActor.h"
 #include "OusterLidarActor.generated.h"
 
+#define MAX_PACKET_SIZE 65507-10
+typedef struct {
+  uint32 seq;
+  uint16 packet_number;
+  uint16 total_packets; 
+  uint8 data[];
+} DividedPacket;
+
 /**
  *
  */
@@ -23,11 +31,16 @@ public:
   class UOusterBaseComponent* LidarComponent;
 
 protected:
+  TArray<TArray<uint8>> DataToSend;
+  
   // Called when the game starts or when spawned
   virtual void BeginPlay() override;
 
   // Called when the game end
   virtual void EndPlay(EEndPlayReason::Type Reason) override;
+
+  void GenerateDataPacket(TArray<uint8> &DataToSend);
+
 
 public:
   /**
@@ -40,4 +53,5 @@ public:
   * calculate raytracing and generate LiDAR packet data
   */
   virtual void LidarThreadTick() override;
+
 };

@@ -140,6 +140,7 @@ public:
   float NoiseStd;
 
   uint32 PacketSeq;
+  uint32 MAX_PACKET_SIZE;
 
   FOusterLidar Sensor;
 

@@ -88,13 +88,13 @@ void UOusterBaseComponent::ConfigureOusterSensor() {
   switch (SensorModel.GetValue()) {
   case 0: { // OS1
     float Elevation[] = {
-        -22.5f, -22.1f, -21.8f, -21.4f, -21.1f, -20.7f, -20.4f, -20.0f, -19.7f,
+         -22.5f, -22.1f, -21.8f, -21.4f, -21.1f, -20.7f, -20.4f, -20.0f, -19.7f,
         -19.3f, -19.0f, -18.6f, -18.2f, -17.9f, -17.5f, -17.2f, -16.8f, -16.5f,
         -16.1f, -15.8f, -15.4f, -15.1f, -14.7f, -14.4f, -14.0f, -13.6f, -13.3f,
         -12.9f, -12.6f, -12.2f, -11.9f, -11.5f, -11.2f, -10.8f, -10.5f, -10.1f,
         -9.7f,  -9.4f,  -9.0f,  -8.7f,  -8.3f,  -8.0f,  -7.6f,  -7.3f,  -6.9f,
         -6.6f,  -6.2f,  -5.8f,  -5.5f,  -5.1f,  -4.8f,  -4.4f,  -4.1f,  -3.7f,
-        -3.4f,  -3.0f,  -2.7f,  -2.3f,  -1.9f,  -1.6f,  -1.2f,  -0.9f,  -0.5f,
+        -3.4f,  -3.0f,  -2.7f,  -2.3f,  -1.9f,  -1.6f,  -1.2f,  -0.9f,  -0.5f, 
         -0.2f,  0.2f,   0.5f,   0.9f,   1.2f,   1.6f,   1.9f,   2.3f,   2.7f,
         3.0f,   3.4f,   3.7f,   4.1f,   4.4f,   4.8f,   5.1f,   5.5f,   5.8f,
         6.2f,   6.6f,   6.9f,   7.3f,   7.6f,   8.0f,   8.3f,   8.7f,   9.0f,
@@ -105,7 +105,7 @@ void UOusterBaseComponent::ConfigureOusterSensor() {
         22.1f,  22.5f};
     Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
     Sensor.VerticalResolution = 128;
-    Sensor.SamplingRate = SRO10;
+    Sensor.SamplingRate = EOusterFrequency::SRO05;
     Sensor.HorizontalResolution = 2048;
     Sensor.fields.Add(PointField(FString(TEXT("x")), 0, PointField::FLOAT32, 1));
     Sensor.fields.Add(PointField(FString(TEXT("y")), 4, PointField::FLOAT32, 1));
@@ -254,12 +254,16 @@ void UOusterBaseComponent::GetScanData() {
                                Sensor.HorizontalResolution);
 
   // Calculate batch size for 'ParallelFor' based on workable thread
-  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn()-2, 1)  ;
+  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn()-4, 1);
 
   // Divide work across threads, each thread processes a portion of all hits
   // (vertically and horizontally)
   const int DivideEnd =
       FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNum));
+  int count = 0;
+
+  float horizontalStepAngle = (float)(360.f / (float)Sensor.HorizontalResolution);
+  //UE_LOG(LogTemp, Warning, TEXT("Horizontal Step Angle: %f"), horizontalStepAngle);
   ParallelFor(
       ThreadNum,
       [&](int32 PFIndex) {
@@ -276,15 +280,19 @@ void UOusterBaseComponent::GetScanData() {
         }
 
         for (int32 Index = StartAt; Index < EndAt; ++Index) {
-          float horizontalStepAngle = (360 / Sensor.HorizontalResolution);
           float Azimuth =
               horizontalStepAngle *
               FMath::FloorToInt((float)(Index / Sensor.VerticalResolution));
           float Elevation =
               Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
 
+          /*if(count++%50 == 0)
+            UE_LOG(LogTemp, Warning, TEXT("Azimuth: %f, Elevation: %f"), Azimuth, Elevation);*/
+
           FRotator LaserRotation(0.f, 0.f, 0.f);
           LaserRotation.Add(Elevation, Azimuth, 0.f);
+
+          
           FRotator Rotation =
               UKismetMathLibrary::ComposeRotators(LaserRotation, LidarRotation);
 
@@ -301,7 +309,7 @@ void UOusterBaseComponent::GetScanData() {
               FCollisionResponseParams::DefaultResponseParam);
 
           if (result.IsValidBlockingHit()) {
-            result.Distance += GetNoiseValue(result);
+            //result.Distance += GetNoiseValue(result);
           }
 
           Sensor.RecordedHits[Index] = result;
@@ -341,7 +349,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
   PointCloud2 ScanData;
   ScanData.header.seq = PacketSeq++;
   ScanData.header.stamp = TimeStamp;
-  ScanData.header.frame_id = FString(TEXT("Ouster"));
+  ScanData.header.frame_id = FString(TEXT("ouster"));
   ScanData.height = 1;
   ScanData.fields = Sensor.fields;
   ScanData.is_bigendian = false;
@@ -355,6 +363,8 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
 
   //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
    //      Sensor.RecordedHits.Num());
+  AActor* Owner = GetOwner();
+
   for (int i = 0; i < Sensor.RecordedHits.Num(); i++) {
     if (!Sensor.RecordedHits[i].IsValidBlockingHit()) {
       continue;
@@ -363,10 +373,18 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
     numOfPoints++;
 
     FVector Location = Sensor.RecordedHits[i].Location;
+    UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
+    FVector RelativeLocation = Owner->GetTransform().InverseTransformPosition(Location);
+    FRotator rotation = FRotator(0.0f, 0.0f, 90.0f);; // Your rotation here
+
+    FQuat QuatRotation = FQuat(rotation);
+
+    //   Rotate the point around the origin
+    FVector rotatedPoint = QuatRotation.RotateVector(RelativeLocation);
     PointXYZI Point;
-    Point.x = Location.X;
-    Point.y = Location.Y;
-    Point.z = Location.Z;
+    Point.x = RelativeLocation.X;
+    Point.y = RelativeLocation.Y;
+    Point.z = RelativeLocation.Z; 
 
     //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after location: %f"), Point.x);
 
@@ -389,6 +407,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
 
     }
   }
+  //UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d numOfPoints %d"), DataToCopy.Num(), numOfPoints);
 
   ScanData.width = numOfPoints;
   ScanData.row_step = ScanData.width;
@@ -397,7 +416,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
   uint32 DataPacketSize =
       sizeof(PointCloud2) + DataToCopy.Num() * sizeof(uint8);
   Sensor.DataPacket.Reserve(DataPacketSize);
-  
+  //UE_LOG(LogTemp, Warning, TEXT("Seq_number: %d"), ScanData.header.seq);
   //add header
   AddToTArray(Sensor.DataPacket, ScanData.header.seq, 4);
   AddToTArray(Sensor.DataPacket, ScanData.header.stamp, 8);
@@ -411,10 +430,13 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
  
   for (uint32 i = 0; i < ScanData.numOfFields; i++) {
     //UE_LOG(LogTemp, Warning, TEXT("Adding fields: %d"), i);
-    AddToTArray(Sensor.DataPacket, i, 4);
+    //AddToTArray(Sensor.DataPacket, i, 4);
+    AddToTArray(Sensor.DataPacket, ScanData.fields[i].name.Len(), 1);
+    //UE_LOG(LogTemp, Warning, TEXT("Adding fields: %d"), ScanData.fields[i].name.Len());
     AddStringToTArray(Sensor.DataPacket, ScanData.fields[i].name);
+    //UE_LOG(LogTemp, Warning, TEXT("Adding fields: %s"), *ScanData.fields[i].name);
     AddToTArray(Sensor.DataPacket, ScanData.fields[i].offset, 4);
-    AddToTArray(Sensor.DataPacket, ScanData.fields[i].datatype, 4);
+    AddToTArray(Sensor.DataPacket, ScanData.fields[i].datatype, 1);
     AddToTArray(Sensor.DataPacket, ScanData.fields[i].count, 4);
   }
   AddToTArray(Sensor.DataPacket, ScanData.is_bigendian, 1);
@@ -425,7 +447,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp) {
   for (uint32 i = 0; i < DataToCopy.Num(); i++) {
     Sensor.DataPacket.Add(DataToCopy[i]);
   }
-  AddToTArray(Sensor.DataPacket, ScanData.is_dense, 0);
+  AddToTArray(Sensor.DataPacket, ScanData.is_dense, 1);
 }
 
 FString UOusterBaseComponent::DecToHex(int DecimalNumber) {
