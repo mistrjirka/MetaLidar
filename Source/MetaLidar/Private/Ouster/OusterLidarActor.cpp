@@ -40,9 +40,9 @@ void AOusterLidarActor::BeginPlay()
 {
   Super::BeginPlay();
 
-  // FTimespan ThreadSleepTime = FTimespan::FromSeconds((float)(1.f /
-  // (float)LidarComponent->Sensor.SamplingRate));
-  FTimespan ThreadSleepTime = FTimespan::FromSeconds(2.0f);
+  FTimespan ThreadSleepTime = FTimespan::FromSeconds((float)(1.f /
+   (float)LidarComponent->Sensor.SamplingRate));
+  //FTimespan ThreadSleepTime = FTimespan::FromSeconds(2.0f);
   UE_LOG(LogTemp, Warning, TEXT("ThreadSleepTime: %f"), ThreadSleepTime.GetTotalSeconds());
   FString UniqueThreadName = "LidarThread";
 

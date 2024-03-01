@@ -315,7 +315,7 @@ void UOusterBaseComponent::GetScanData()
   Sensor.RecordedHits.Init(FHitResult(ForceInit), Sensor.VerticalResolution * Sensor.HorizontalResolution);
 
   // Calculate batch size for 'ParallelFor' based on workable thread
-  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() - 4, 1);
+  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() - 4, 1); 
 
   // Divide work across threads, each thread processes a portion of all hits
   // (vertically and horizontally)
@@ -356,11 +356,11 @@ void UOusterBaseComponent::GetScanData()
 
           FRotator Rotation = UKismetMathLibrary::ComposeRotators(LaserRotation, LidarRotation);
 
-          FRotator noise = CalculateRotationNoise(Azimuth, NoiseFrequency, NoiseAmplitude, GetWorld()->GetTimeSeconds());
-          FQuat Quat = FQuat(noise);
-          FQuat Quat2 = FQuat(Rotation);
-          FQuat NoiseCombined = Quat * Quat2;
-          Rotation = NoiseCombined.Rotator();
+          //FRotator noise = CalculateRotationNoise(Azimuth, NoiseFrequency, NoiseAmplitude, GetWorld()->GetTimeSeconds());
+          //FQuat Quat = FQuat(noise);
+          //FQuat Quat2 = FQuat(Rotation);
+          //FQuat NoiseCombined = Quat * Quat2;
+          //Rotation = NoiseCombined.Rotator();
 
           FVector BeginPoint = LidarPosition + Sensor.MinRange * UKismetMathLibrary::GetForwardVector(Rotation);
           FVector EndPoint = LidarPosition + Sensor.MaxRange * UKismetMathLibrary::GetForwardVector(Rotation);
