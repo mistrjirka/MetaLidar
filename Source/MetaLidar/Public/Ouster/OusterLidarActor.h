@@ -45,7 +45,7 @@ public:
 
 protected:
   TArray<TArray<uint8>> DataToSend;
-  SharedMemory shared_memory{"/t07ySQdKFH_meta_lidar", 40000000};
+  SharedMemory shared_memory{SHM_NAME, INITIAL_MEMORY_SIZE};
   
   // Called when the game starts or when spawned
   virtual void BeginPlay() override;

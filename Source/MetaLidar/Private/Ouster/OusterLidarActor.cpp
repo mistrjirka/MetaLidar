@@ -5,8 +5,10 @@ THIRD_PARTY_INCLUDES_START
 #include "zlib.h"
 THIRD_PARTY_INCLUDES_END
 
-TArray<uint8> CompressData(const TArray<uint8> &InData) {
-  if (InData.Num() == 0) {
+TArray<uint8> CompressData(const TArray<uint8>& InData)
+{
+  if (InData.Num() == 0)
+  {
     return TArray<uint8>();
   }
 
@@ -14,8 +16,8 @@ TArray<uint8> CompressData(const TArray<uint8> &InData) {
   TArray<uint8> OutData;
   OutData.AddUninitialized(OutBufferSize);
 
-  if (compress2(OutData.GetData(), &OutBufferSize, InData.GetData(),
-                InData.Num(), Z_BEST_COMPRESSION) != Z_OK) {
+  if (compress2(OutData.GetData(), &OutBufferSize, InData.GetData(), InData.Num(), Z_BEST_COMPRESSION) != Z_OK)
+  {
     // Handle error
   }
 
@@ -23,39 +25,30 @@ TArray<uint8> CompressData(const TArray<uint8> &InData) {
   return OutData;
 }
 // Sets default values
-AOusterLidarActor::AOusterLidarActor() {
+AOusterLidarActor::AOusterLidarActor()
+{
   // Set this actor to call Tick() every frame.  You can turn this off to
   // improve performance if you don't need it.
   PrimaryActorTick.bCanEverTick = false;
 
-  LidarComponent =
-      CreateDefaultSubobject<UOusterBaseComponent>(TEXT("OusterComponent"));
+  LidarComponent = CreateDefaultSubobject<UOusterBaseComponent>(TEXT("OusterComponent"));
   this->AddOwnedComponent(LidarComponent);
 }
 
 // Called when the game starts or when spawned
-void AOusterLidarActor::BeginPlay() {
+void AOusterLidarActor::BeginPlay()
+{
   Super::BeginPlay();
-
-  if (UdpScanComponent) {
-    ConfigureUDPScan();
-    UdpScanComponent->OpenSendSocket(UdpScanComponent->Settings.SendIP,
-                                     UdpScanComponent->Settings.SendPort);
-    UdpScanComponent->OpenReceiveSocket(UdpScanComponent->Settings.ReceiveIP,
-                                        UdpScanComponent->Settings.SendPort);
-  }
 
   // FTimespan ThreadSleepTime = FTimespan::FromSeconds((float)(1.f /
   // (float)LidarComponent->Sensor.SamplingRate));
   FTimespan ThreadSleepTime = FTimespan::FromSeconds(2.0f);
-  UE_LOG(LogTemp, Warning, TEXT("ThreadSleepTime: %f"),
-         ThreadSleepTime.GetTotalSeconds());
+  UE_LOG(LogTemp, Warning, TEXT("ThreadSleepTime: %f"), ThreadSleepTime.GetTotalSeconds());
   FString UniqueThreadName = "LidarThread";
 
-  LidarThread =
-      new LidarThreadProcess(ThreadSleepTime, *UniqueThreadName, this);
+  LidarThread = new LidarThreadProcess(ThreadSleepTime, *UniqueThreadName, this);
 
-  MemoryPacket *packet = (MemoryPacket *)this->shared_memory.get_ptr();
+  MemoryPacket* packet = (MemoryPacket*)this->shared_memory.get_ptr();
   packet->seq = 0;
   packet->packet_size = 0;
 
@@ -65,28 +58,25 @@ void AOusterLidarActor::BeginPlay() {
   pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
   pthread_mutex_init(&(packet->mutex), &attr);
 
-  if (LidarThread) {
+  if (LidarThread)
+  {
     LidarThread->Init();
     LidarThread->LidarThreadInit();
     UE_LOG(LogTemp, Warning, TEXT("Lidar thread initialized!"));
   }
 }
 
-void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason) {
+void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason)
+{
   UE_LOG(LogTemp, Warning, TEXT("EndPlay called!"));
-  if (LidarThread) {
+  if (LidarThread)
+  {
     LidarThread->LidarThreadShutdown();
     LidarThread->Stop();
-    try {
-      pthread_mutex_consistent(
-          &((MemoryPacket *)this->shared_memory.get_ptr())->mutex);
-      pthread_mutex_unlock(
-          &((MemoryPacket *)this->shared_memory.get_ptr())->mutex);
-      pthread_mutex_destroy(
-          &((MemoryPacket *)this->shared_memory.get_ptr())->mutex);
-    } catch (...) {
-      UE_LOG(LogTemp, Warning, TEXT("pthread_mutex_consistent failed!"));
-    }
+    pthread_mutex_consistent(&((MemoryPacket*)this->shared_memory.get_ptr())->mutex);
+    pthread_mutex_unlock(&((MemoryPacket*)this->shared_memory.get_ptr())->mutex);
+    pthread_mutex_destroy(&((MemoryPacket*)this->shared_memory.get_ptr())->mutex);
+
     UE_LOG(LogTemp, Warning, TEXT("Lidar thread stopped!"));
   }
 
@@ -100,19 +90,19 @@ void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason) {
 
   uint32 LoopCount = 0;
 
-  while (!LidarThread->ThreadHasStopped() && LoopCount < 50) {
+  while (!LidarThread->ThreadHasStopped() && LoopCount < 50)
+  {
     UE_LOG(LogTemp, Warning, TEXT("Waiting for LidarThread to end..."));
     FPlatformProcess::Sleep(0.1);
     LoopCount++;
   }
 
-  if (!LidarThread->ThreadHasStopped()) {
-    try {
-      if (LidarThread->Thread)
-        LidarThread->Thread->Kill();
-    } catch (...) {
-      UE_LOG(LogTemp, Warning, TEXT("LidarThread failed to end in time!"));
-    }
+  if (!LidarThread->ThreadHasStopped())
+  {
+    if (LidarThread->Thread)
+      LidarThread->Thread->Kill();
+    UE_LOG(LogTemp, Warning, TEXT("LidarThread failed to end in time!"));
+
     UE_LOG(LogTemp, Warning, TEXT("LidarThread failed to end in time!"));
   }
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -123,11 +113,12 @@ void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason) {
   Super::EndPlay(Reason);
 }
 
-void AOusterLidarActor::SendDataPacket(TArray<uint8> &wholePacket) {
+void AOusterLidarActor::SendDataPacket(TArray<uint8>& wholePacket)
+{
   uint32 packetSize = wholePacket.Num();
   size_t newSizeToAllocate = sizeof(MemoryPacket) + packetSize;
-  pthread_mutex_lock(&((MemoryPacket *)this->shared_memory.get_ptr())->mutex);
-  MemoryPacket *packet = (MemoryPacket *)this->shared_memory.get_ptr();
+  pthread_mutex_lock(&((MemoryPacket*)this->shared_memory.get_ptr())->mutex);
+  MemoryPacket* packet = (MemoryPacket*)this->shared_memory.get_ptr();
   packet->seq++;
   packet->packet_size = packetSize;
   FMemory::Memcpy(packet->data, wholePacket.GetData(), packetSize);
@@ -137,21 +128,25 @@ void AOusterLidarActor::SendDataPacket(TArray<uint8> &wholePacket) {
 // ! On Thread (not game thread)
 // Never stop until finished calculating!
 // This would be a verrrrry large hitch if done on game thread!
-void AOusterLidarActor::LidarThreadTick() {
+void AOusterLidarActor::LidarThreadTick()
+{
   float TimeDiffMs = 0;
 
   //! Make sure to come all the way out of all function routines with this same
   //! check so as to ensure thread exits as quickly as possible, allowing game
   //! thread to finish See EndPlay for more information.
-  if (LidarThread && LidarThread->IsThreadPaused()) {
+  if (LidarThread && LidarThread->IsThreadPaused())
+  {
     return;
   }
 
-  if (BeginTimestamp == 0) {
+  if (BeginTimestamp == 0)
+  {
     PacketTimestamp = 0;
-  } else {
-    PacketTimestamp +=
-        (uint32)(1e6 * (FPlatformTime::Seconds() - BeginTimestamp));
+  }
+  else
+  {
+    PacketTimestamp += (uint32)(1e6 * (FPlatformTime::Seconds() - BeginTimestamp));
   }
   BeginTimestamp = FPlatformTime::Seconds();
 
@@ -162,10 +157,6 @@ void AOusterLidarActor::LidarThreadTick() {
   this->SendDataPacket(LidarComponent->Sensor.DataPacket);
 }
 
-void AOusterLidarActor::ConfigureUDPScan() {
-  UdpScanComponent->Settings.SendIP = LidarComponent->DestinationIP;
-  UdpScanComponent->Settings.ReceiveIP = LidarComponent->SensorIP;
-  UdpScanComponent->Settings.SendPort = 11021;
-  UdpScanComponent->Settings.SendSocketName = FString(TEXT("ue5-scan-send"));
-  UdpScanComponent->Settings.BufferSize = 20;
+void AOusterLidarActor::ConfigureUDPScan()
+{
 }

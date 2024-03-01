@@ -6,6 +6,7 @@ public class MetaLidar : ModuleRules
 {
 	public MetaLidar(ReadOnlyTargetRules Target) : base(Target)
 	{
+		//UEBuildConfiguration.bForceEnableExceptions = true;
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 		AddEngineThirdPartyPrivateStaticDependencies(Target, "zlib");
 		// Path to the root directory of PCL
@@ -37,7 +38,6 @@ public class MetaLidar : ModuleRules
 				"CoreUObject",
 				"Engine",
 				"PhysicsCore",
-				"UDPWrapper",
 				"Projects"
 			}
 			);

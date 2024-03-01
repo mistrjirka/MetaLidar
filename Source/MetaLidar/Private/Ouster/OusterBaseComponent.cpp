@@ -450,7 +450,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
     //   Rotate the point around the origin
     PointXYZI Point;
     Point.x = RelativeLocation.X / 100.f;
-    Point.y = RelativeLocation.Y / 100.f;
+    Point.y = -RelativeLocation.Y / 100.f;
     Point.z = RelativeLocation.Z / 100.f;
 
     // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after location: %f"), Point.x);
