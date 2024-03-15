@@ -48,7 +48,9 @@ void AOusterLidarActor::BeginPlay()
 
   LidarThread = new LidarThreadProcess(ThreadSleepTime, *UniqueThreadName, this);
 
-  MemoryPacket* packet = (MemoryPacket*)this->shared_memory.get_ptr();
+  this->shared_memory = std::make_unique<SharedMemory>(TCHAR_TO_ANSI(*LidarComponent->Sensor.MemoryLabel), LidarComponent->Sensor.MemorySize);
+
+  MemoryPacket* packet = (MemoryPacket*)this->shared_memory->get_ptr();
   packet->seq = 0;
   packet->packet_size = 0;
 
@@ -73,9 +75,9 @@ void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason)
   {
     LidarThread->LidarThreadShutdown();
     LidarThread->Stop();
-    pthread_mutex_consistent(&((MemoryPacket*)this->shared_memory.get_ptr())->mutex);
-    pthread_mutex_unlock(&((MemoryPacket*)this->shared_memory.get_ptr())->mutex);
-    pthread_mutex_destroy(&((MemoryPacket*)this->shared_memory.get_ptr())->mutex);
+    pthread_mutex_consistent(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
+    pthread_mutex_unlock(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
+    pthread_mutex_destroy(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
 
     UE_LOG(LogTemp, Warning, TEXT("Lidar thread stopped!"));
   }
@@ -117,8 +119,8 @@ void AOusterLidarActor::SendDataPacket(TArray<uint8>& wholePacket)
 {
   uint32 packetSize = wholePacket.Num();
   size_t newSizeToAllocate = sizeof(MemoryPacket) + packetSize;
-  pthread_mutex_lock(&((MemoryPacket*)this->shared_memory.get_ptr())->mutex);
-  MemoryPacket* packet = (MemoryPacket*)this->shared_memory.get_ptr();
+  pthread_mutex_lock(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
+  MemoryPacket* packet = (MemoryPacket*)this->shared_memory->get_ptr();
   packet->seq++;
   packet->packet_size = packetSize;
   FMemory::Memcpy(packet->data, wholePacket.GetData(), packetSize);

@@ -2,6 +2,7 @@
 #include "Ouster/OusterBaseComponent.h"
 
 #include "Logging/LogMacros.h"
+#include <cstdint>
 
 // Sets default values for this component's properties
 UOusterBaseComponent::UOusterBaseComponent()
@@ -121,6 +122,8 @@ void UOusterBaseComponent::ConfigureOusterSensor()
       Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep;
       Sensor.MinRange = 80.0f;
       Sensor.MaxRange = 12000.0f;
+      Sensor.MemoryLabel = "/t07ySQdKFH_meta_lidar";
+      Sensor.MemorySize = 40000000;
       Sensor.PacketSize =
           FMath::FloorToInt((float)(1.5f * (sizeof(PointCloud2) + Sensor.HorizontalResolution *
                                                                       Sensor.VerticalResolution * Sensor.PointStep)));
@@ -226,20 +229,21 @@ float UOusterBaseComponent::GenerateGaussianNoise(float mean, float stdDev)
 }
 
 // Function to generate 3D noise based on a normal distribution
-FVector Generate3DNoise(float StandardDeviation) {
-    // Static is used here for efficiency, so the engine is only constructed once.
-    static std::default_random_engine Generator;
+FVector Generate3DNoise(float StandardDeviation)
+{
+  // Static is used here for efficiency, so the engine is only constructed once.
+  static std::default_random_engine Generator;
 
-    // Normal distribution centered at 0 with the given standard deviation
-    std::normal_distribution<float> Distribution(0.0f, StandardDeviation);
+  // Normal distribution centered at 0 with the given standard deviation
+  std::normal_distribution<float> Distribution(0.0f, StandardDeviation);
 
-    // Generate the noise components
-    float NoiseX = Distribution(Generator);
-    float NoiseY = Distribution(Generator);
-    float NoiseZ = Distribution(Generator);
+  // Generate the noise components
+  float NoiseX = Distribution(Generator);
+  float NoiseY = Distribution(Generator);
+  float NoiseZ = Distribution(Generator);
 
-    // Return the noise vector
-    return FVector(NoiseX, NoiseY, NoiseZ);
+  // Return the noise vector
+  return FVector(NoiseX, NoiseY, NoiseZ);
 }
 
 float UOusterBaseComponent::GetNoiseValue(FHitResult result)
@@ -265,19 +269,20 @@ float UOusterBaseComponent::GetNoiseValue(FHitResult result)
   return Noise;
 }
 // Function to calculate rotation noise based on azimuth, frequency, amplitude, and current time
-FRotator CalculateRotationNoise(float Azimuth, float Frequency, float Amplitude, float CurrentTime) {
-    // Convert azimuth to a rotational component (here, we'll apply it to yaw for demonstration)
-    float YawNoise = FMath::Sin(CurrentTime * Frequency) * Amplitude;
+FRotator CalculateRotationNoise(float Azimuth, float Frequency, float Amplitude, float CurrentTime)
+{
+  // Convert azimuth to a rotational component (here, we'll apply it to yaw for demonstration)
+  float YawNoise = FMath::Sin(CurrentTime * Frequency) * Amplitude;
 
-    // Assuming you want the noise to affect the yaw based on the azimuth
-    // If you want to include pitch and roll variations, you could apply similar calculations
-    float PitchNoise = 0.0f; // For simplicity, not applying noise here
-    float RollNoise = 0.0f;  // For simplicity, not applying noise here
+  // Assuming you want the noise to affect the yaw based on the azimuth
+  // If you want to include pitch and roll variations, you could apply similar calculations
+  float PitchNoise = 0.0f;  // For simplicity, not applying noise here
+  float RollNoise = 0.0f;   // For simplicity, not applying noise here
 
-    // Create the noise rotation
-    FRotator NoiseRotation = FRotator(PitchNoise, YawNoise, RollNoise);
+  // Create the noise rotation
+  FRotator NoiseRotation = FRotator(PitchNoise, YawNoise, RollNoise);
 
-    return NoiseRotation;
+  return NoiseRotation;
 }
 // Function to calculate noise vector based on azimuth, frequency, and amplitude
 FVector CalculateNoise(float Azimuth, float Frequency, float Amplitude, float CurrentTime)
@@ -300,6 +305,23 @@ FVector CalculateNoise(float Azimuth, float Frequency, float Amplitude, float Cu
   return NoiseVector;
 }
 
+template <typename T>
+void ShuffleArray(TArray<T>& ArrayToShuffle)
+{
+  if (ArrayToShuffle.Num() > 0)
+  {
+    int32 LastIndex = ArrayToShuffle.Num() - 1;
+    for (int32 i = 0; i <= LastIndex; ++i)
+    {
+      int32 Index = FMath::RandRange(i, LastIndex);
+      if (i != Index)
+      {
+        ArrayToShuffle.Swap(i, Index);
+      }
+    }
+  }
+}
+
 void UOusterBaseComponent::GetScanData()
 {
   // complex collisions: true
@@ -311,11 +333,15 @@ void UOusterBaseComponent::GetScanData()
   FVector LidarPosition = this->GetActorLocation();
   FRotator LidarRotation = this->GetActorRotation();
 
+  AActor* Owner = GetOwner();
+
+  Sensor.Transform = Owner->GetTransform();
+
   // Initialize array for raycast result
   Sensor.RecordedHits.Init(FHitResult(ForceInit), Sensor.VerticalResolution * Sensor.HorizontalResolution);
 
   // Calculate batch size for 'ParallelFor' based on workable thread
-  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() - 4, 1); 
+  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() - 4, 1);
 
   // Divide work across threads, each thread processes a portion of all hits
   // (vertically and horizontally)
@@ -324,6 +350,12 @@ void UOusterBaseComponent::GetScanData()
 
   float horizontalStepAngle = (float)(360.f / (float)Sensor.HorizontalResolution);
   // UE_LOG(LogTemp, Warning, TEXT("Horizontal Step Angle: %f"), horizontalStepAngle);
+  /*TArray<int32> indices;
+  for (int32 i = 0; i < Sensor.RecordedHits.Num(); ++i)
+  {
+    indices.Add(i);
+  }
+  ShuffleArray(indices);*/
 
   ParallelFor(
       ThreadNum,
@@ -342,12 +374,17 @@ void UOusterBaseComponent::GetScanData()
           EndAt = Sensor.RecordedHits.Num();
         }
 
+        // UE_LOG(LogTemp, Warning, TEXT("Rotation: %f"), LidarRotation.Yaw);
+        // UE_LOG(LogTemp, Warning, TEXT("Location: %f"), LidarPosition.X);
+
         for (int32 Index = StartAt; Index < EndAt; ++Index)
         {
+          //int32 Index = indices[i];
+
           float Azimuth = horizontalStepAngle * FMath::FloorToInt((float)(Index / Sensor.VerticalResolution));
           float Elevation = Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
 
-          /*if(count++%50 == 0)
+          /*if (count++ % 50 == 0)
             UE_LOG(LogTemp, Warning, TEXT("Azimuth: %f, Elevation: %f"), Azimuth, Elevation);*/
 
           FRotator LaserRotation(0.f, 0.f, 0.f);
@@ -356,11 +393,9 @@ void UOusterBaseComponent::GetScanData()
 
           FRotator Rotation = UKismetMathLibrary::ComposeRotators(LaserRotation, LidarRotation);
 
-          //FRotator noise = CalculateRotationNoise(Azimuth, NoiseFrequency, NoiseAmplitude, GetWorld()->GetTimeSeconds());
-          //FQuat Quat = FQuat(noise);
-          //FQuat Quat2 = FQuat(Rotation);
-          //FQuat NoiseCombined = Quat * Quat2;
-          //Rotation = NoiseCombined.Rotator();
+          // FRotator noise = CalculateRotationNoise(Azimuth, NoiseFrequency, NoiseAmplitude,
+          // GetWorld()->GetTimeSeconds()); FQuat Quat = FQuat(noise); FQuat Quat2 = FQuat(Rotation); FQuat
+          // NoiseCombined = Quat * Quat2; Rotation = NoiseCombined.Rotator();
 
           FVector BeginPoint = LidarPosition + Sensor.MinRange * UKismetMathLibrary::GetForwardVector(Rotation);
           FVector EndPoint = LidarPosition + Sensor.MaxRange * UKismetMathLibrary::GetForwardVector(Rotation);
@@ -414,10 +449,14 @@ void AddStringToTArray(TArray<uint8>& arr, const FString& str)
 
 void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 {
+
+  uint32_t timestamp_sec = TimeStamp/1000000;
+  uint32_t timestamp_nsec = TimeStamp*1000;
   Sensor.DataPacket.Empty();
   PointCloud2 ScanData;
   ScanData.header.seq = PacketSeq++;
-  ScanData.header.stamp = TimeStamp;
+  ScanData.header.stamp.sec = timestamp_sec;
+  ScanData.header.stamp.nsec = timestamp_nsec;
   ScanData.header.frame_id = FString(TEXT("ouster"));
   ScanData.height = 1;
   ScanData.fields = Sensor.fields;
@@ -432,7 +471,6 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 
   // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
   //      Sensor.RecordedHits.Num());
-  AActor* Owner = GetOwner();
 
   for (int i = 0; i < Sensor.RecordedHits.Num(); i++)
   {
@@ -445,7 +483,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 
     FVector Location = Sensor.RecordedHits[i].Location;
     // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
-    FVector RelativeLocation = Owner->GetTransform().InverseTransformPosition(Location);
+    FVector RelativeLocation = Sensor.Transform.InverseTransformPosition(Location);
 
     //   Rotate the point around the origin
     PointXYZI Point;
@@ -486,7 +524,8 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
   // UE_LOG(LogTemp, Warning, TEXT("Seq_number: %d"), ScanData.header.seq);
   // add header
   AddToTArray(Sensor.DataPacket, ScanData.header.seq, 4);
-  AddToTArray(Sensor.DataPacket, ScanData.header.stamp, 8);
+  AddToTArray(Sensor.DataPacket, ScanData.header.stamp.sec, 4);
+  AddToTArray(Sensor.DataPacket, ScanData.header.stamp.nsec, 4);
   AddToTArray(Sensor.DataPacket, ScanData.header.frame_id.Len(), 4);
   AddStringToTArray(Sensor.DataPacket, ScanData.header.frame_id);
   AddToTArray(Sensor.DataPacket, ScanData.height, 4);
@@ -516,6 +555,8 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
     Sensor.DataPacket.Add(DataToCopy[i]);
   }
   AddToTArray(Sensor.DataPacket, ScanData.is_dense, 1);
+  // UE_LOG(LogTemp, Warning, TEXT("Rotation: %f"), LidarRotation.Yaw);
+  // UE_LOG(LogTemp, Warning, TEXT("Location: %f"), LidarPosition.X);
 }
 
 FString UOusterBaseComponent::DecToHex(int DecimalNumber)

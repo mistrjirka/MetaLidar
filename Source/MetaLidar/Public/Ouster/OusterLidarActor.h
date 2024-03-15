@@ -7,26 +7,9 @@
 #include "Ouster/OusterBaseComponent.h"
 #include "SharedMemory/SharedMemory.h"
 #include "LidarBaseActor.h"
+#include "SharedStructure.h"
 #include "OusterLidarActor.generated.h"
 
-
-#define MAX_PACKET_SIZE 65507-10
-#define INITIAL_MEMORY_SIZE 40000000
-#define SHM_NAME "/t07ySQdKFH_meta_lidar"
-
-typedef struct {
-  uint32 seq;
-  uint16 packet_number;
-  uint16 total_packets; 
-  uint8 data[];
-} DividedPacket;
-
-typedef struct {
-  pthread_mutex_t mutex;
-  uint32 seq;
-  size_t packet_size;
-  uint8 data[];
-} MemoryPacket;
 
 /**
  *
@@ -45,7 +28,7 @@ public:
 
 protected:
   TArray<TArray<uint8>> DataToSend;
-  SharedMemory shared_memory{SHM_NAME, INITIAL_MEMORY_SIZE};
+  std::unique_ptr<SharedMemory> shared_memory;
   
   // Called when the game starts or when spawned
   virtual void BeginPlay() override;
