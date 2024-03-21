@@ -20,7 +20,7 @@ void AOusterGyroActor::BeginPlay()
    (float)(GyroComponent->Sensor.Frequency*ACCELERATION_BUFFER_SIZE)));
   //FTimespan ThreadSleepTime = FTimespan::FromSeconds(2.0f);
   UE_LOG(LogTemp, Warning, TEXT("ThreadSleepTime: %f %d"), ThreadSleepTime.GetTotalSeconds(), GyroComponent->Sensor.Frequency*ACCELERATION_BUFFER_SIZE);
-  FString UniqueThreadName = "LidarThread";
+  FString UniqueThreadName = "LidarThreadOusterGyro";
 
   LidarThread = new LidarThreadProcess(ThreadSleepTime, *UniqueThreadName, this);
 
@@ -47,18 +47,18 @@ void AOusterGyroActor::BeginPlay()
 
 void AOusterGyroActor::EndPlay(EEndPlayReason::Type Reason)
 {
-  UE_LOG(LogTemp, Warning, TEXT("EndPlay called!"));
-  if (LidarThread)
+  UE_LOG(LogTemp, Warning, TEXT("gyro EndPlay called!"));
+  /*if (LidarThread)
   {
     LidarThread->LidarThreadShutdown();
     LidarThread->Stop();
+
     pthread_mutex_consistent(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
     pthread_mutex_unlock(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
     pthread_mutex_destroy(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
 
-    UE_LOG(LogTemp, Warning, TEXT("Lidar thread stopped!"));
+    UE_LOG(LogTemp, Warning, TEXT("Gyro thread stopped!"));
   }
-  LidarThread->Thread->Kill();
 
 
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -83,8 +83,7 @@ void AOusterGyroActor::EndPlay(EEndPlayReason::Type Reason)
     if (LidarThread->Thread)
     LidarThread->Thread->Kill();
     UE_LOG(LogTemp, Warning, TEXT("LidarThread failed to end in time!"));
-
-  }
+  }*/
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   // Do this last

@@ -44,7 +44,7 @@ void AOusterLidarActor::BeginPlay()
    (float)LidarComponent->Sensor.SamplingRate));
   //FTimespan ThreadSleepTime = FTimespan::FromSeconds(2.0f);
   UE_LOG(LogTemp, Warning, TEXT("ThreadSleepTime: %f"), ThreadSleepTime.GetTotalSeconds());
-  FString UniqueThreadName = "LidarThread";
+  FString UniqueThreadName = "LidarThreadOuster";
 
   LidarThread = new LidarThreadProcess(ThreadSleepTime, *UniqueThreadName, this);
 

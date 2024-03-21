@@ -8,13 +8,15 @@
 #include "Physics/PhysicsInterfaceCore.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "SharedStructure.h"
+#include "CircularBuffer/CircularBuffer.h"
+#include <array>
 #include <random>
 #include <sys/types.h>
 
 #include "OusterGyroBaseComponent.generated.h"
 
-#define ACCELERATION_BUFFER_SIZE 2
-#define ROTATION_BUFFER_SIZE 2
+#define ACCELERATION_BUFFER_SIZE 3
+#define ROTATION_BUFFER_SIZE 3
 
 //IMU is/will be inspired by the following link https://bitbucket.org/frostlab/holoocean-engine/src/master/Source/Holodeck/Sensors/Private/IMUSensor.cpp
 
@@ -27,6 +29,8 @@ struct FOusterGyro {
 
   public:
   uint32 Frequency;
+  float SamplingRate;
+
   FString MemoryLabel;
   uint32 MemorySize;
   TArray<uint8> DataPacket;
@@ -54,7 +58,6 @@ public:
 
   UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "OusterGyro")
   float Frequency;
-  uint32 LastTimeStamp;
 
   uint32 MAX_PACKET_SIZE;
 
@@ -85,13 +88,16 @@ public:
                 FActorComponentTickFunction *ThisTickFunction) override;
 
 private:
+  uint32 LastTimeStamp;
+  uint32 LastTimeSnapshotStamp;
   FRotator CurrentRotation;
-  std::pair<FVector, uint32> AccelerationBuffer[ACCELERATION_BUFFER_SIZE];
-  std::pair<FVector, uint32> RotationBuffer[ROTATION_BUFFER_SIZE];
-  uint32 AccelerationIndex;
-  uint32 RotationIndex;
+  CircularBuffer<std::pair<FVector, uint32>, ACCELERATION_BUFFER_SIZE> AccelerationBuffer;
+  CircularBuffer<std::pair<FVector, uint32>, ROTATION_BUFFER_SIZE> RotationBuffer;
   
-
+  FVector linear_fit_a_accel;
+  FVector linear_fit_b_accel;
+  FVector linear_fit_a_rot;
+  FVector linear_fit_b_rot;
 
   float Gravity;
   UWorld *CurrentWorld;
@@ -101,10 +107,12 @@ private:
 
   float GetNoiseValue(FHitResult result);
 
+  FVector getExtrapolatedVelocity(double time);
+
   /**
    * Get current location of Actor.
    */
-  FVector GetActorLinearAccel();
+  FVector GetActorLinearAccel(double time);
 
   /**
    * Get current rotation of Actor.
@@ -115,6 +123,9 @@ private:
    * Get current time of game.
    */
   uint32 GetTimestampMicroseconds();
+
+  template<typename T, size_t S>
+  void calculateLinearFit(CircularBuffer<T, S> buffer, size_t size, FVector& linear_fit_a, FVector& linear_fit_b);
 
   void TakeSnapshot(uint32 TimeStamp);
 
