@@ -19,6 +19,7 @@ class PacketGenerationTask;
 UENUM(BlueprintType)
 enum EOusterModelName {
   OS1 UMETA(DisplayName = "OS-1"),
+  OS2 UMETA(DisplayName = "OS-2"),
 };
 
 UENUM(BlueprintType)
@@ -59,6 +60,10 @@ public:
   float MaxRange;
   FString MemoryLabel;
   uint32 MemorySize;
+  float NoiseStd;
+  float NoiseFrequency;
+  float NoiseAmplitude;
+
 };
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
@@ -160,6 +165,8 @@ public:
 private:
   bool SupportMultithread = true;
 
+  FRotator LidarRotation;
+  
   float GenerateGaussianNoise(float mean, float stdDev);
 
   void ConfigureOusterSensor();

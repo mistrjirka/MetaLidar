@@ -3,6 +3,7 @@
 
 #include "Logging/LogMacros.h"
 #include <cstdint>
+#include <cstring>
 
 // Sets default values for this component's properties
 UOusterBaseComponent::UOusterBaseComponent()
@@ -23,9 +24,6 @@ UOusterBaseComponent::UOusterBaseComponent()
   DestinationIP = FString(TEXT("0.0.0.0"));
   ScanPort = 2368;
   PositionPort = 8308;
-  NoiseStd = 1.0f;
-  NoiseFrequency = 60.0f;
-  NoiseFrequency = 1.0f;
   PacketSeq = 0;
 }
 
@@ -34,7 +32,6 @@ void UOusterBaseComponent::BeginPlay()
 {
   Super::BeginPlay();
   FString TheFloatStr = FString::SanitizeFloat(NoiseStd);
-  UE_LOG(LogTemp, Warning, TEXT("%s"), *TheFloatStr);
 
   ConfigureOusterSensor();
 }
@@ -111,19 +108,59 @@ void UOusterBaseComponent::ConfigureOusterSensor()
       Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
       Sensor.VerticalResolution = 128;
       Sensor.SamplingRate = EOusterFrequency::SRO05;
-      Sensor.HorizontalResolution = 2048;
+      Sensor.HorizontalResolution = 1024;
       Sensor.fields.Add(PointField(FString(TEXT("x")), 0, PointField::FLOAT32, 1));
       Sensor.fields.Add(PointField(FString(TEXT("y")), 4, PointField::FLOAT32, 1));
       Sensor.fields.Add(PointField(FString(TEXT("z")), 8, PointField::FLOAT32, 1));
-      Sensor.fields.Add(PointField(FString(TEXT("i")), 12, PointField::FLOAT32, 1));
+      Sensor.fields.Add(PointField(FString(TEXT("Intensity")), 12, PointField::UINT8, 1));
       ;
       Sensor.PointStep = this->CalculatePointStep(Sensor.fields);
       // UE_LOG(LogTemp, Warning, TEXT("PointStep: %d"), Sensor.PointStep);
       Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep;
       Sensor.MinRange = 80.0f;
       Sensor.MaxRange = 12000.0f;
+      Sensor.NoiseStd = 1.8;
+      Sensor.NoiseFrequency = 233.7f;
+      Sensor.NoiseAmplitude = 0.01f;
+
       Sensor.MemoryLabel = "/t07ySQdKFH_meta_lidar";
       Sensor.MemorySize = 40000000;
+      Sensor.PacketSize =
+          FMath::FloorToInt((float)(1.5f * (sizeof(PointCloud2) + Sensor.HorizontalResolution *
+                                                                      Sensor.VerticalResolution * Sensor.PointStep)));
+      break;
+    }
+    case 1: {  // OS2
+      float Elevation[] = { -11.2f, -11.1f, -10.9f, -10.7f, -10.5f, -10.4f, -10.2f, -10.0f, -9.8f, -9.7f, -9.5f, -9.3f,
+                            -9.1f,  -8.9f,  -8.8f,  -8.6f,  -8.4f,  -8.2f,  -8.1f,  -7.9f,  -7.7f, -7.5f, -7.4f, -7.2f,
+                            -7.0f,  -6.8f,  -6.6f,  -6.5f,  -6.3f,  -6.1f,  -5.9f,  -5.8f,  -5.6f, -5.4f, -5.2f, -5.0f,
+                            -4.9f,  -4.7f,  -4.5f,  -4.3f,  -4.2f,  -4.0f,  -3.8f,  -3.6f,  -3.5f, -3.3f, -3.1f, -2.9f,
+                            -2.7f,  -2.6f,  -2.4f,  -2.2f,  -2.0f,  -1.9f,  -1.7f,  -1.5f,  -1.3f, -1.2f, -1.0f, -0.8f,
+                            -0.6f,  -0.4f,  -0.3f,  -0.1f,  0.1f,   0.3f,   0.4f,   0.6f,   0.8f,  1.0f,  1.2f,  1.3f,
+                            1.5f,   1.7f,   1.9f,   2.0f,   2.2f,   2.4f,   2.6f,   2.7f,   2.9f,  3.1f,  3.3f,  3.5f,
+                            3.6f,   3.8f,   4.0f,   4.2f,   4.3f,   4.5f,   4.7f,   4.9f,   5.0f,  5.2f,  5.4f,  5.6f,
+                            5.8f,   5.9f,   6.1f,   6.3f,   6.5f,   6.6f,   6.8f,   7.0f,   7.2f,  7.4f,  7.5f,  7.7f,
+                            7.9f,   8.1f,   8.2f,   8.4f,   8.6f,   8.8f,   8.9f,   9.1f,   9.3f,  9.5f,  9.7f,  9.8f,
+                            10.0f,  10.2f,  10.4f,  10.5f,  10.7f,  10.9f,  11.1f,  11.2f };
+      Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
+      Sensor.VerticalResolution = 128;
+      Sensor.SamplingRate = EOusterFrequency::SRO05;
+      Sensor.HorizontalResolution = 2048;
+      Sensor.fields.Add(PointField(FString(TEXT("x")), 0, PointField::FLOAT32, 1));
+      Sensor.fields.Add(PointField(FString(TEXT("y")), 4, PointField::FLOAT32, 1));
+      Sensor.fields.Add(PointField(FString(TEXT("z")), 8, PointField::FLOAT32, 1));
+      Sensor.fields.Add(PointField(FString(TEXT("Intensity")), 12, PointField::UINT8, 1));
+
+      Sensor.PointStep = this->CalculatePointStep(Sensor.fields);
+      UE_LOG(LogTemp, Warning, TEXT("PointStep: %d"), Sensor.PointStep);
+      Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep;
+      Sensor.MinRange = 80.0f;
+      Sensor.MaxRange = 12000.0f;
+      Sensor.MemoryLabel = "/t07ySQdKFH_meta_lidar";
+      Sensor.MemorySize = 40000000;
+      Sensor.NoiseStd = 2.0;
+      Sensor.NoiseFrequency = 233.7f;
+      Sensor.NoiseAmplitude = 0.01f;
       Sensor.PacketSize =
           FMath::FloorToInt((float)(1.5f * (sizeof(PointCloud2) + Sensor.HorizontalResolution *
                                                                       Sensor.VerticalResolution * Sensor.PointStep)));
@@ -162,6 +199,9 @@ void UOusterBaseComponent::ConfigureOusterSensor()
       Sensor.ReturnMode = 57;
       break;
   }
+
+  UE_LOG(LogTemp, Warning, TEXT("Horizontal Resolution: %d"), Sensor.HorizontalResolution);
+  UE_LOG(LogTemp, Warning, TEXT("Sampling Rate: %d"), Sensor.SamplingRate);
 
   // Initialize raycast vector and azimuth vector
   Sensor.AzimuthAngle.Init(90.f, this->Sensor.VerticalResolution * this->Sensor.HorizontalResolution);
@@ -212,7 +252,7 @@ uint8 UOusterBaseComponent::GetIntensity(const FString Surface, const float Dist
   else
   {  // Default PhysicalMaterial value, in case of the PhysicalMaterial is
      // not applied
-    MaxReflectivity = 20;
+    MaxReflectivity = 100;
   }
 
   return (uint8)((MinReflectivity - MaxReflectivity) / (Sensor.MaxRange - Sensor.MinRange) * Distance +
@@ -248,7 +288,7 @@ FVector Generate3DNoise(float StandardDeviation)
 
 float UOusterBaseComponent::GetNoiseValue(FHitResult result)
 {
-  uint8 intensity = 255;
+  float intensity = 255;
 
   auto PhysMat = result.PhysMaterial;
 
@@ -272,12 +312,12 @@ float UOusterBaseComponent::GetNoiseValue(FHitResult result)
 FRotator CalculateRotationNoise(float Azimuth, float Frequency, float Amplitude, float CurrentTime)
 {
   // Convert azimuth to a rotational component (here, we'll apply it to yaw for demonstration)
-  float YawNoise = FMath::Sin(CurrentTime * Frequency) * Amplitude;
+  float YawNoise = 0.0f;
 
   // Assuming you want the noise to affect the yaw based on the azimuth
   // If you want to include pitch and roll variations, you could apply similar calculations
-  float PitchNoise = 0.0f;  // For simplicity, not applying noise here
-  float RollNoise = 0.0f;   // For simplicity, not applying noise here
+  float PitchNoise = FMath::Sin(CurrentTime * Frequency) * Amplitude;  // For simplicity, not applying noise here
+  float RollNoise = 0.0f;                                              // For simplicity, not applying noise here
 
   // Create the noise rotation
   FRotator NoiseRotation = FRotator(PitchNoise, YawNoise, RollNoise);
@@ -331,7 +371,7 @@ void UOusterBaseComponent::GetScanData()
 
   // Get owner's location and rotation
   FVector LidarPosition = this->GetActorLocation();
-  FRotator LidarRotation = this->GetActorRotation();
+  LidarRotation = this->GetActorRotation();
 
   AActor* Owner = GetOwner();
 
@@ -341,78 +381,84 @@ void UOusterBaseComponent::GetScanData()
   Sensor.RecordedHits.Init(FHitResult(ForceInit), Sensor.VerticalResolution * Sensor.HorizontalResolution);
 
   // Calculate batch size for 'ParallelFor' based on workable thread
-  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() - 4, 1);
 
   // Divide work across threads, each thread processes a portion of all hits
   // (vertically and horizontally)
+  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() / 2, 1);
+
   const int DivideEnd = FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNum));
   int count = 0;
 
   float horizontalStepAngle = (float)(360.f / (float)Sensor.HorizontalResolution);
   // UE_LOG(LogTemp, Warning, TEXT("Horizontal Step Angle: %f"), horizontalStepAngle);
-  /*TArray<int32> indices;
-  for (int32 i = 0; i < Sensor.RecordedHits.Num(); ++i)
+
   {
-    indices.Add(i);
-  }
-  ShuffleArray(indices);*/
+    TRACE_CPUPROFILER_EVENT_SCOPE_STR("Paralel scanning")
 
-  ParallelFor(
-      ThreadNum,
-      [&](int32 PFIndex) {
-        // divide work acrosss threads. Each thread will process a portion of
-        // the hits.
-        int StartAt = PFIndex * DivideEnd;
-        if (StartAt >= Sensor.RecordedHits.Num())
-        {
-          return;
-        }
-
-        int EndAt = StartAt + DivideEnd;
-        if (PFIndex == (ThreadNum - 1))
-        {
-          EndAt = Sensor.RecordedHits.Num();
-        }
-
-        // UE_LOG(LogTemp, Warning, TEXT("Rotation: %f"), LidarRotation.Yaw);
-        // UE_LOG(LogTemp, Warning, TEXT("Location: %f"), LidarPosition.X);
-
-        for (int32 Index = StartAt; Index < EndAt; ++Index)
-        {
-          //int32 Index = indices[i];
-
-          float Azimuth = horizontalStepAngle * FMath::FloorToInt((float)(Index / Sensor.VerticalResolution));
-          float Elevation = Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
-
-          /*if (count++ % 50 == 0)
-            UE_LOG(LogTemp, Warning, TEXT("Azimuth: %f, Elevation: %f"), Azimuth, Elevation);*/
-
-          FRotator LaserRotation(0.f, 0.f, 0.f);
-
-          LaserRotation.Add(Elevation, Azimuth, 0.f);
-
-          FRotator Rotation = UKismetMathLibrary::ComposeRotators(LaserRotation, LidarRotation);
-
-          // FRotator noise = CalculateRotationNoise(Azimuth, NoiseFrequency, NoiseAmplitude,
-          // GetWorld()->GetTimeSeconds()); FQuat Quat = FQuat(noise); FQuat Quat2 = FQuat(Rotation); FQuat
-          // NoiseCombined = Quat * Quat2; Rotation = NoiseCombined.Rotator();
-
-          FVector BeginPoint = LidarPosition + Sensor.MinRange * UKismetMathLibrary::GetForwardVector(Rotation);
-          FVector EndPoint = LidarPosition + Sensor.MaxRange * UKismetMathLibrary::GetForwardVector(Rotation);
-
-          FHitResult result;
-          GetWorld()->LineTraceSingleByChannel(result, BeginPoint, EndPoint, ECC_Visibility, TraceParams,
-                                               FCollisionResponseParams::DefaultResponseParam);
-
-          if (result.IsValidBlockingHit())
+    ParallelFor(
+        ThreadNum,
+        [&](int32 PFIndex) {
+          // divide work acrosss threads. Each thread will process a portion of
+          // the hits.
+          int StartAt = PFIndex * DivideEnd;
+          if (StartAt >= Sensor.RecordedHits.Num())
           {
-            result.Location += Generate3DNoise(NoiseStd);
+            return;
           }
 
-          Sensor.RecordedHits[Index] = result;
-        };
-      },
-      !SupportMultithread);
+          int EndAt = StartAt + DivideEnd;
+          if (PFIndex == (ThreadNum - 1))
+          {
+            EndAt = Sensor.RecordedHits.Num();
+          }
+
+          // UE_LOG(LogTemp, Warning, TEXT("Rotation: %f"), LidarRotation.Yaw);
+          // UE_LOG(LogTemp, Warning, TEXT("Location: %f"), LidarPosition.X);
+
+          for (int32 Index = StartAt; Index < EndAt; ++Index)
+          {
+            float Azimuth = horizontalStepAngle * FMath::FloorToInt((float)(Index / Sensor.VerticalResolution));
+            float Elevation = Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
+
+            /*if (count++ % 50 == 0)
+              UE_LOG(LogTemp, Warning, TEXT("Azimuth: %f, Elevation: %f"), Azimuth, Elevation);*/
+
+            FRotator LaserRotation(0.f, 0.f, 0.f);
+
+            LaserRotation.Add(Elevation, Azimuth, 0.f);
+
+            FRotator Rotation = UKismetMathLibrary::ComposeRotators(LaserRotation, LidarRotation);
+
+            FRotator noise =
+                CalculateRotationNoise(Azimuth, Sensor.NoiseFrequency, Sensor.NoiseAmplitude, FPlatformTime::Seconds());
+            FQuat Quat = FQuat(noise);
+            FQuat Quat2 = FQuat(Rotation);
+            FQuat NoiseCombined = Quat * Quat2;
+            Rotation = NoiseCombined.Rotator();
+
+            FVector BeginPoint = LidarPosition + Sensor.MinRange * UKismetMathLibrary::GetForwardVector(Rotation);
+            FVector EndPoint = LidarPosition + Sensor.MaxRange * UKismetMathLibrary::GetForwardVector(Rotation);
+
+            FHitResult result;
+            GetWorld()->LineTraceSingleByChannel(result, BeginPoint, EndPoint, ECC_Visibility, TraceParams,
+                                                 FCollisionResponseParams::DefaultResponseParam);
+
+            /*  if (result.IsValidBlockingHit())
+              {
+                float a = 1/(Sensor.MaxRange - Sensor.MinRange),b = Sensor.MinRange;
+                float noiseScalar = (1 - (a)*(result.Distance- b));
+                if(Index % 433 == 0)
+                  UE_LOG(LogTemp, Warning, TEXT("Noise Scalar: %f"), noiseScalar);
+                FVector noiseVector = Generate3DNoise(Sensor.NoiseStd);
+                noiseVector *= noiseScalar;
+                result.Location += noiseVector;
+              }*/
+
+            Sensor.RecordedHits[Index] = result;
+          };
+        },
+        !SupportMultithread);
+  }
 }
 
 FVector UOusterBaseComponent::GetActorLocation()
@@ -449,112 +495,140 @@ void AddStringToTArray(TArray<uint8>& arr, const FString& str)
 
 void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 {
-
-  uint32_t timestamp_sec = TimeStamp/1000000;
-  uint32_t timestamp_nsec = TimeStamp*1000;
-  Sensor.DataPacket.Empty();
-  PointCloud2 ScanData;
-  ScanData.header.seq = PacketSeq++;
-  ScanData.header.stamp.sec = timestamp_sec;
-  ScanData.header.stamp.nsec = timestamp_nsec;
-  ScanData.header.frame_id = FString(TEXT("ouster"));
-  ScanData.height = 1;
-  ScanData.fields = Sensor.fields;
-  ScanData.is_bigendian = false;
-  ScanData.point_step = Sensor.PointStep;
-  ScanData.is_dense = true;
-  ScanData.numOfFields = Sensor.fields.Num();
-  // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
-  // Sensor.RecordedHits.Num());
-  TArray<uint8> DataToCopy;
-  uint32_t numOfPoints = 0;
-
-  // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
-  //      Sensor.RecordedHits.Num());
-
-  for (int i = 0; i < Sensor.RecordedHits.Num(); i++)
+  TRACE_CPUPROFILER_EVENT_SCOPE_STR("Fancy work 1")
   {
-    if (!Sensor.RecordedHits[i].IsValidBlockingHit())
+    TRACE_CPUPROFILER_EVENT_SCOPE_STR("Fancy work 2")
+
+    uint32_t timestamp_sec = TimeStamp / 1000000;
+    uint32_t timestamp_nsec = TimeStamp * 1000;
+    Sensor.DataPacket.Empty();
+    PointCloud2 ScanData;
+    ScanData.header.seq = PacketSeq++;
+    ScanData.header.stamp.sec = timestamp_sec;
+    ScanData.header.stamp.nsec = timestamp_nsec;
+    ScanData.header.frame_id = FString(TEXT("ouster"));
+    ScanData.height = 1;
+    ScanData.fields = Sensor.fields;
+    ScanData.is_bigendian = false;
+    ScanData.point_step = Sensor.PointStep;
+    ScanData.is_dense = true;
+    ScanData.numOfFields = Sensor.fields.Num();
+
+    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
+    // Sensor.RecordedHits.Num());
+    TArray<uint8> DataToCopy;
+    uint32_t numOfPoints = 0;
+
+    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
+    //      Sensor.RecordedHits.Num());
+
+    DataToCopy.Reserve(Sensor.RecordedHits.Num() * Sensor.PointStep);
+
+    const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() / 2, 1);
+
+    const int DivideEnd = FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNum));
+    int count = 0;
+    
+
+    for (int32 i = 0; i < Sensor.RecordedHits.Num(); ++i)
     {
-      continue;
-    }
-    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket in forloop: %d"), i);
-    numOfPoints++;
+      if (!Sensor.RecordedHits[i].IsValidBlockingHit())
+      {
+        continue;
+      }
+      // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket in forloop: %d"), i);
+      numOfPoints++;
 
-    FVector Location = Sensor.RecordedHits[i].Location;
-    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
-    FVector RelativeLocation = Sensor.Transform.InverseTransformPosition(Location);
+      FVector Location = Sensor.RecordedHits[i].Location;
+      float a = 1 / (Sensor.MaxRange - Sensor.MinRange), b = Sensor.MinRange;
+      float noiseScalar = (1 - (a) * (Sensor.RecordedHits[i].Distance - b));
+      /*if(Index % 433 == 0)
+        UE_LOG(LogTemp, Warning, TEXT("Noise Scalar: %f"), noiseScalar);*/
+      FVector noiseVector = Generate3DNoise(Sensor.NoiseStd);
+      noiseVector *= noiseScalar;
+      Location += noiseVector;
+      // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
+      FVector RelativeLocation = Sensor.Transform.InverseTransformPosition(Location);
+      // RelativeLocation = LidarRotation.UnrotateVector(RelativeLocation);
+      //   Rotate the point around the origin
+      PointXYZI Point;
+      Point.x = RelativeLocation.X / 100.f;
+      Point.y = -RelativeLocation.Y / 100.f;
+      Point.z = RelativeLocation.Z / 100.f;
 
-    //   Rotate the point around the origin
-    PointXYZI Point;
-    Point.x = RelativeLocation.X / 100.f;
-    Point.y = -RelativeLocation.Y / 100.f;
-    Point.z = RelativeLocation.Z / 100.f;
+      // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after location: %f"), Point.x);
 
-    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after location: %f"), Point.x);
+      auto PhysMat = Sensor.RecordedHits[i].PhysMaterial;
+      if (PhysMat != nullptr)
+      {
+        Point.intensity = GetIntensity(*PhysMat->GetName(), (Sensor.RecordedHits[i].Distance));
+      }
+      else
+      {
+        Point.intensity = 0.f;
+      }
 
-    auto PhysMat = Sensor.RecordedHits[i].PhysMaterial;
-    if (PhysMat != nullptr)
+      // FMemory::Memcpy(data, &Point, Sensor.PointStep);
+       unsigned char const *data =  reinterpret_cast<unsigned char*>(&Point);
+      // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after memcpy: %d"), i);
+      // uint64_t whereToCopy = DataToCopy.Num();
+      // DataToCopy.SetNum(DataToCopy.Num() + Sensor.PointStep);
+
+      for (int j = 0; j < Sensor.PointStep; j++)
+      {
+        DataToCopy.Add(data[j]);
+      }
+
+      //FMemory::Memcpy(DataToCopy.GetData() + whereToCopy, &Point, Sensor.PointStep);
+    };
+
+    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d numOfPoints %d"), DataToCopy.Num(), numOfPoints);
+
+    ScanData.width = numOfPoints;
+    ScanData.row_step = ScanData.width;
+
+    uint32 DataPacketSize = sizeof(PointCloud2) + DataToCopy.Num() * sizeof(uint8);
+    Sensor.DataPacket.Reserve(DataPacketSize);
+    // UE_LOG(LogTemp, Warning, TEXT("Seq_number: %d"), ScanData.header.seq);
+    // add header
+    AddToTArray(Sensor.DataPacket, ScanData.header.seq, 4);
+    AddToTArray(Sensor.DataPacket, ScanData.header.stamp.sec, 4);
+    AddToTArray(Sensor.DataPacket, ScanData.header.stamp.nsec, 4);
+    AddToTArray(Sensor.DataPacket, ScanData.header.frame_id.Len(), 4);
+    AddStringToTArray(Sensor.DataPacket, ScanData.header.frame_id);
+    AddToTArray(Sensor.DataPacket, ScanData.height, 4);
+    AddToTArray(Sensor.DataPacket, ScanData.width, 4);
+    AddToTArray(Sensor.DataPacket, ScanData.numOfFields, 4);
+    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"), ScanData.fields.Num());
+
+    for (uint32 i = 0; i < ScanData.numOfFields; i++)
     {
-      Point.intensity = GetIntensity(*PhysMat->GetName(), (Sensor.RecordedHits[i].Distance * 2) / 10);
+      // UE_LOG(LogTemp, Warning, TEXT("Adding fields: %d"), i);
+      // AddToTArray(Sensor.DataPacket, i, 4);
+      AddToTArray(Sensor.DataPacket, ScanData.fields[i].name.Len(), 1);
+      // UE_LOG(LogTemp, Warning, TEXT("Adding fields: %d"), ScanData.fields[i].name.Len());
+      AddStringToTArray(Sensor.DataPacket, ScanData.fields[i].name);
+      // UE_LOG(LogTemp, Warning, TEXT("Adding fields: %s"), *ScanData.fields[i].name);
+      AddToTArray(Sensor.DataPacket, ScanData.fields[i].offset, 4);
+      AddToTArray(Sensor.DataPacket, ScanData.fields[i].datatype, 1);
+      AddToTArray(Sensor.DataPacket, ScanData.fields[i].count, 4);
     }
-    else
+    AddToTArray(Sensor.DataPacket, ScanData.is_bigendian, 1);
+    AddToTArray(Sensor.DataPacket, ScanData.point_step, 4);
+    AddToTArray(Sensor.DataPacket, ScanData.row_step, 4);
+    // add data
+    //uint64_t whereToCopy = Sensor.DataPacket.Num();
+    //Sensor.DataPacket.SetNum(DataToCopy.Num() + Sensor.DataPacket.Num());
+    //FMemory::Memcpy(Sensor.DataPacket.GetData() + whereToCopy, DataToCopy.GetData(), DataToCopy.Num());
+
+    for (uint32 i = 0; i < DataToCopy.Num(); i++)
     {
-      Point.intensity = 0x00;
+      Sensor.DataPacket.Add(DataToCopy[i]);
     }
 
-    unsigned char data[Sensor.PointStep];
-    FMemory::Memcpy(data, &Point, Sensor.PointStep);
-
-    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after memcpy: %d"), i);
-
-    for (int j = 0; j < Sensor.PointStep; j++)
-    {
-      // UE_LOG(LogTemp, Warning, TEXT("DataTo copy in forloop: %d"), j);
-      DataToCopy.Add(data[j]);
-    }
+    AddToTArray(Sensor.DataPacket, ScanData.is_dense, 1);
   }
-  // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d numOfPoints %d"), DataToCopy.Num(), numOfPoints);
 
-  ScanData.width = numOfPoints;
-  ScanData.row_step = ScanData.width;
-
-  uint32 DataPacketSize = sizeof(PointCloud2) + DataToCopy.Num() * sizeof(uint8);
-  Sensor.DataPacket.Reserve(DataPacketSize);
-  // UE_LOG(LogTemp, Warning, TEXT("Seq_number: %d"), ScanData.header.seq);
-  // add header
-  AddToTArray(Sensor.DataPacket, ScanData.header.seq, 4);
-  AddToTArray(Sensor.DataPacket, ScanData.header.stamp.sec, 4);
-  AddToTArray(Sensor.DataPacket, ScanData.header.stamp.nsec, 4);
-  AddToTArray(Sensor.DataPacket, ScanData.header.frame_id.Len(), 4);
-  AddStringToTArray(Sensor.DataPacket, ScanData.header.frame_id);
-  AddToTArray(Sensor.DataPacket, ScanData.height, 4);
-  AddToTArray(Sensor.DataPacket, ScanData.width, 4);
-  AddToTArray(Sensor.DataPacket, ScanData.numOfFields, 4);
-  // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"), ScanData.fields.Num());
-
-  for (uint32 i = 0; i < ScanData.numOfFields; i++)
-  {
-    // UE_LOG(LogTemp, Warning, TEXT("Adding fields: %d"), i);
-    // AddToTArray(Sensor.DataPacket, i, 4);
-    AddToTArray(Sensor.DataPacket, ScanData.fields[i].name.Len(), 1);
-    // UE_LOG(LogTemp, Warning, TEXT("Adding fields: %d"), ScanData.fields[i].name.Len());
-    AddStringToTArray(Sensor.DataPacket, ScanData.fields[i].name);
-    // UE_LOG(LogTemp, Warning, TEXT("Adding fields: %s"), *ScanData.fields[i].name);
-    AddToTArray(Sensor.DataPacket, ScanData.fields[i].offset, 4);
-    AddToTArray(Sensor.DataPacket, ScanData.fields[i].datatype, 1);
-    AddToTArray(Sensor.DataPacket, ScanData.fields[i].count, 4);
-  }
-  AddToTArray(Sensor.DataPacket, ScanData.is_bigendian, 1);
-  AddToTArray(Sensor.DataPacket, ScanData.point_step, 4);
-  AddToTArray(Sensor.DataPacket, ScanData.row_step, 4);
-
-  // add data
-  for (uint32 i = 0; i < DataToCopy.Num(); i++)
-  {
-    Sensor.DataPacket.Add(DataToCopy[i]);
-  }
-  AddToTArray(Sensor.DataPacket, ScanData.is_dense, 1);
   // UE_LOG(LogTemp, Warning, TEXT("Rotation: %f"), LidarRotation.Yaw);
   // UE_LOG(LogTemp, Warning, TEXT("Location: %f"), LidarPosition.X);
 }

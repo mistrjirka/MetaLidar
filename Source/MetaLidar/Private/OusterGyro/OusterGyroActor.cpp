@@ -48,14 +48,15 @@ void AOusterGyroActor::BeginPlay()
 void AOusterGyroActor::EndPlay(EEndPlayReason::Type Reason)
 {
   UE_LOG(LogTemp, Warning, TEXT("gyro EndPlay called!"));
+  pthread_mutex_consistent(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
+  pthread_mutex_unlock(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
+  pthread_mutex_destroy(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
   /*if (LidarThread)
   {
     LidarThread->LidarThreadShutdown();
     LidarThread->Stop();
 
-    pthread_mutex_consistent(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
-    pthread_mutex_unlock(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
-    pthread_mutex_destroy(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
+    
 
     UE_LOG(LogTemp, Warning, TEXT("Gyro thread stopped!"));
   }
@@ -76,14 +77,14 @@ void AOusterGyroActor::EndPlay(EEndPlayReason::Type Reason)
     UE_LOG(LogTemp, Warning, TEXT("Waiting for LidarThread to end..."));
     FPlatformProcess::Sleep(0.1);
     LoopCount++;
-  }
+  }*/
 
   if (!LidarThread->ThreadHasStopped())
   {
     if (LidarThread->Thread)
     LidarThread->Thread->Kill();
     UE_LOG(LogTemp, Warning, TEXT("LidarThread failed to end in time!"));
-  }*/
+  }
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
   // Do this last

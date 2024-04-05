@@ -54,7 +54,7 @@ typedef struct PointXYZI {
   float x;
   float y;
   float z;
-  float intensity;
+  uint8_t intensity;
 } PointXYZI;
 
 typedef struct

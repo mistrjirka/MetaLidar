@@ -94,8 +94,8 @@ private:
   CircularBuffer<std::pair<FVector, uint32>, ACCELERATION_BUFFER_SIZE> AccelerationBuffer;
   CircularBuffer<std::pair<FVector, uint32>, ROTATION_BUFFER_SIZE> RotationBuffer;
   
-  FVector linear_fit_a_accel;
-  FVector linear_fit_b_accel;
+  FVector linear_fit_a_vel;
+  FVector linear_fit_b_vel;
   FVector linear_fit_a_rot;
   FVector linear_fit_b_rot;
 
@@ -109,6 +109,8 @@ private:
 
   FVector getExtrapolatedVelocity(double time);
 
+  FVector getExtrapolatedRotation(double time);
+
   /**
    * Get current location of Actor.
    */
@@ -117,7 +119,7 @@ private:
   /**
    * Get current rotation of Actor.
    */
-  FVector GetActorRotationSpeed();
+  FVector GetActorRotationSpeed(double time);
 
   /**
    * Get current time of game.
@@ -125,7 +127,7 @@ private:
   uint32 GetTimestampMicroseconds();
 
   template<typename T, size_t S>
-  void calculateLinearFit(CircularBuffer<T, S> buffer, size_t size, FVector& linear_fit_a, FVector& linear_fit_b);
+  void calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector& vector_fit_a, FVector& vector_fit_b);
 
   void TakeSnapshot(uint32 TimeStamp);
 

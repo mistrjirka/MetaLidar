@@ -1,5 +1,5 @@
-min_val = -22.5
-max_val = 22.5
+min_val = -11.25
+max_val = 11.25
 num_entries = 128
 def generate_cpp_array(num_entries, min_val, max_val):
     step = (max_val - min_val) / (num_entries-1)
