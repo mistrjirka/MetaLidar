@@ -25,9 +25,11 @@ UOusterBaseComponent::UOusterBaseComponent()
   ScanPort = 2368;
   PositionPort = 8308;
   PacketSeq = 0;
+  UE_LOG(LogTemp, Warning, TEXT("Recommended number of workers: %d"), FPlatformMisc::NumberOfWorkerThreadsToSpawn());
   ThreadNumScan = FMath::Max(FMath::RoundToInt(FPlatformMisc::NumberOfWorkerThreadsToSpawn()*0.1588 + 0.7978), 1); //calculated based on the number of cores
-  ThreadNumPackage = FMath::Max(FMath::RoundToInt(FPlatformMisc::NumberOfWorkerThreadsToSpawn()*0.3736 + 0.3881), 1);
-  UE_LOG(LogTemp, Warning, TEXT("ThreadNum: %d"), ThreadNumScan);
+  ThreadNumPackage = FMath::Max(FMath::RoundToInt(FPlatformMisc::NumberOfWorkerThreadsToSpawn()*0.4127 + 0.5611), 1);
+  UE_LOG(LogTemp, Warning, TEXT("ThreadNum scan: %d"), ThreadNumScan);
+  UE_LOG(LogTemp, Warning, TEXT("ThreadNum package: %d"), ThreadNumPackage);
 }
 
 // Called when the game starts
@@ -545,24 +547,15 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
     //      Sensor.RecordedHits.Num());
     AActor* Owner = GetOwner();
 
-    int numberOfCoresInSecond[] = { 1, 2, 4, 8, 16};
-    int timebetweencores = 15;
-    int TimeFromStart = FMath::FloorToInt(Owner->GetGameTimeSinceCreation()/timebetweencores);
-    int prevThreadNumScan = ThreadNumPackage;
-    ThreadNumPackage = numberOfCoresInSecond[TimeFromStart % 5];
-    if(ThreadNumPackage != prevThreadNumScan)
-    UE_LOG(LogTemp, Warning, TEXT("ThreadNum: %d"), ThreadNumPackage);
-
-    const int ThreadNum = ThreadNumPackage/*FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() / 2, 1)*/;
 
 
-    const int DivideEnd = FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNum));
+    const int DivideEnd = FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNumPackage));
     int count = 0;
-    TArray<uint8> DataToCopyThread[ThreadNum];
+    TArray<uint8> DataToCopyThread[ThreadNumPackage];
     TArray<uint32> DataToCopySize;
-    DataToCopySize.Init(0, ThreadNum);
+    DataToCopySize.Init(0, ThreadNumPackage);
 
-    ParallelFor(ThreadNum, [&](int32 PFIndex) {
+    ParallelFor(ThreadNumPackage, [&](int32 PFIndex) {
       int StartAt = PFIndex * DivideEnd;
       DataToCopySize[PFIndex] = 0;
 
@@ -573,7 +566,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 
       int EndAt = StartAt + DivideEnd;
 
-      if (PFIndex == (ThreadNum - 1))
+      if (PFIndex == (ThreadNumPackage - 1))
       {
         EndAt = Sensor.RecordedHits.Num();
       }
@@ -631,7 +624,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
       // FMemory::Memcpy(DataToCopy.GetData() + whereToCopy, &Point, Sensor.PointStep);
     });
 
-    for (int i = 0; i < ThreadNum; i++)
+    for (int i = 0; i < ThreadNumPackage; i++)
     {
       numOfPoints += DataToCopySize[i];
     }
@@ -675,7 +668,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
     // Sensor.DataPacket.SetNum(DataToCopy.Num() + Sensor.DataPacket.Num());
     // FMemory::Memcpy(Sensor.DataPacket.GetData() + whereToCopy, DataToCopy.GetData(), DataToCopy.Num());
 
-    for (uint32_t i = 0; i < ThreadNum; i++)
+    for (uint32_t i = 0; i < ThreadNumPackage; i++)
     {
       for (uint32_t j = 0; j < DataToCopyThread[i].Num(); j++)
       {
