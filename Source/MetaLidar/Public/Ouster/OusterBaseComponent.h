@@ -164,6 +164,8 @@ public:
 
 private:
   bool SupportMultithread = true;
+  int ThreadNumScan = 1;
+  int ThreadNumPackage = 1;
 
   FRotator LidarRotation;
   

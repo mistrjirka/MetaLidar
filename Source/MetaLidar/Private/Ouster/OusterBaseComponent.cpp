@@ -25,6 +25,9 @@ UOusterBaseComponent::UOusterBaseComponent()
   ScanPort = 2368;
   PositionPort = 8308;
   PacketSeq = 0;
+  ThreadNumScan = FMath::Max(FMath::RoundToInt(FPlatformMisc::NumberOfWorkerThreadsToSpawn()*0.1588 + 0.7978), 1); //calculated based on the number of cores
+  ThreadNumPackage = FMath::Max(FMath::RoundToInt(FPlatformMisc::NumberOfWorkerThreadsToSpawn()*0.3736 + 0.3881), 1);
+  UE_LOG(LogTemp, Warning, TEXT("ThreadNum: %d"), ThreadNumScan);
 }
 
 // Called when the game starts
@@ -384,9 +387,18 @@ void UOusterBaseComponent::GetScanData()
 
   // Divide work across threads, each thread processes a portion of all hits
   // (vertically and horizontally)
-  const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() / 2, 1);
+  /*FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() / 2, 1)*/;
 
-  const int DivideEnd = FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNum));
+  /*int timebetweencores = 15;
+  int TimeFromStart = FMath::FloorToInt(Owner->GetGameTimeSinceCreation()/timebetweencores);
+  int prevThreadNumScan = ThreadNumScan;
+  ThreadNumScan = numberOfCoresInSecond[TimeFromStart % 6];
+  if(ThreadNumScan != prevThreadNumScan)
+  UE_LOG(LogTemp, Warning, TEXT("ThreadNum: %d"), ThreadNumScan);*/
+  
+
+
+  const int DivideEnd = FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNumScan));
   int count = 0;
 
   float horizontalStepAngle = (float)(360.f / (float)Sensor.HorizontalResolution);
@@ -395,7 +407,7 @@ void UOusterBaseComponent::GetScanData()
   {
     TRACE_CPUPROFILER_EVENT_SCOPE_STR("ParallelFor loop inside GetScanData()")
     ParallelFor(
-        ThreadNum,
+        ThreadNumScan,
         [&](int32 PFIndex) {
           // divide work acrosss threads. Each thread will process a portion of
           // the hits.
@@ -406,7 +418,7 @@ void UOusterBaseComponent::GetScanData()
           }
 
           int EndAt = StartAt + DivideEnd;
-          if (PFIndex == (ThreadNum - 1))
+          if (PFIndex == (ThreadNumScan - 1))
           {
             EndAt = Sensor.RecordedHits.Num();
           }
@@ -531,8 +543,18 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 
     // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
     //      Sensor.RecordedHits.Num());
+    AActor* Owner = GetOwner();
 
-    const int ThreadNum = FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() / 2, 1);
+    int numberOfCoresInSecond[] = { 1, 2, 4, 8, 16};
+    int timebetweencores = 15;
+    int TimeFromStart = FMath::FloorToInt(Owner->GetGameTimeSinceCreation()/timebetweencores);
+    int prevThreadNumScan = ThreadNumPackage;
+    ThreadNumPackage = numberOfCoresInSecond[TimeFromStart % 5];
+    if(ThreadNumPackage != prevThreadNumScan)
+    UE_LOG(LogTemp, Warning, TEXT("ThreadNum: %d"), ThreadNumPackage);
+
+    const int ThreadNum = ThreadNumPackage/*FMath::Max(FPlatformMisc::NumberOfWorkerThreadsToSpawn() / 2, 1)*/;
+
 
     const int DivideEnd = FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNum));
     int count = 0;
