@@ -393,7 +393,7 @@ void UOusterBaseComponent::GetScanData()
   // UE_LOG(LogTemp, Warning, TEXT("Horizontal Step Angle: %f"), horizontalStepAngle);
 
   {
-
+    TRACE_CPUPROFILER_EVENT_SCOPE_STR("ParallelFor loop inside GetScanData()")
     ParallelFor(
         ThreadNum,
         [&](int32 PFIndex) {
@@ -420,7 +420,7 @@ void UOusterBaseComponent::GetScanData()
             FRotator Rotation;
             {
 
-              //TRACE_CPUPROFILER_EVENT_SCOPE_STR("Position calculation inside loop")
+              TRACE_CPUPROFILER_EVENT_SCOPE_STR("Position calculation inside loop")
 
               Azimuth = horizontalStepAngle * FMath::FloorToInt((float)(Index / Sensor.VerticalResolution));
               Elevation = Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
