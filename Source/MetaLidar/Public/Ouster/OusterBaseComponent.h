@@ -9,6 +9,7 @@
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "SharedStructure.h"
 #include <random>
+
 #include "OusterBaseComponent.generated.h"
 
 //IMU is/will be inspired by the following link https://bitbucket.org/frostlab/holoocean-engine/src/master/Source/Holodeck/Sensors/Private/IMUSensor.cpp
@@ -49,7 +50,7 @@ public:
   uint32 RowStep;
   TArray<float> ElevationAngle;
   TArray<uint8> DataPacket;
-  TArray<FHitResult> RecordedHits;
+  TArray<std::pair<FHitResult, FRotator>> RecordedHits;
   FTransform Transform;
   TArray<float> AzimuthAngle;
   uint8 SamplingRate;
@@ -122,7 +123,7 @@ public:
    */
   void GenerateDataPacket(uint32 TimeStamp);
 
-  uint8 GetIntensity(const FString Surface, const float Distance) const;
+  uint8 GetIntensity(std::pair<FHitResult, FRotator>) const;
 
   /**
    * Get current location of Actor.
@@ -133,6 +134,10 @@ public:
    * Get current rotation of Actor.
    */
   FRotator GetActorRotation();
+
+  FVector CreateLocationNoise(const FHitResult point);
+
+  FVector Generate3DNoise(float stdDev);
 
   /**
    * Get current time of game.
@@ -172,8 +177,6 @@ private:
   float GenerateGaussianNoise(float mean, float stdDev);
 
   void ConfigureOusterSensor();
-
-  float GetNoiseValue(FHitResult result);
 
   uint32 CalculatePointStep(const TArray<PointField> &fields);
   // Function to get the size of the data type in bytes

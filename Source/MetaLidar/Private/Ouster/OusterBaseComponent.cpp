@@ -4,6 +4,7 @@
 #include "Logging/LogMacros.h"
 #include <cstdint>
 #include <cstring>
+#include <utility>
 
 // Sets default values for this component's properties
 UOusterBaseComponent::UOusterBaseComponent()
@@ -160,7 +161,7 @@ void UOusterBaseComponent::ConfigureOusterSensor()
       UE_LOG(LogTemp, Warning, TEXT("PointStep: %d"), Sensor.PointStep);
       Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep;
       Sensor.MinRange = 80.0f;
-      Sensor.MaxRange = 12000.0f;
+      Sensor.MaxRange = 4000.0f;
       Sensor.MemoryLabel = "/t07ySQdKFH_meta_lidar";
       Sensor.MemorySize = 40000000;
       Sensor.NoiseStd = 2.0;
@@ -240,8 +241,28 @@ void UOusterBaseComponent::ConfigureOusterSensor()
 // laser is shot skyward, both distance and
 //        reflectivity values will be 0. The key is a distance of 0, because 0
 //        is a valid reflectivity value (i.e. one step above noise).
-uint8 UOusterBaseComponent::GetIntensity(const FString Surface, const float Distance) const
+uint8 UOusterBaseComponent::GetIntensity(std::pair<FHitResult, FRotator> hitPair) const
 {
+  // Get the hit result from the pair
+  FHitResult Hit = hitPair.first;
+
+  // Get the distance from the hit result
+  float Distance = Hit.Distance;
+
+  FRotator Rotation = hitPair.second;
+  FVector StartingVector =  UKismetMathLibrary::GetForwardVector(Rotation);
+  FVector NormalVector = Hit.ImpactNormal;
+  float DotProduct = FVector::DotProduct(StartingVector, NormalVector);
+  float lengths = StartingVector.Size() * NormalVector.Size();
+
+  float cos = DotProduct / lengths;
+
+  float maxReflectivity = 255 * (Sensor.MaxRange - Distance) / (Sensor.MaxRange - Sensor.MinRange);
+
+  // Calculate the intensity based on the distance
+  return (uint8)(cos * maxReflectivity);
+/*  FString Surface = Hit.PhysMaterial->GetName();
+  
   uint8 MaxReflectivity = 0;
   uint8 MinReflectivity = 0;
 
@@ -249,6 +270,7 @@ uint8 UOusterBaseComponent::GetIntensity(const FString Surface, const float Dist
   {
     // https://docs.unrealengine.com/5.0/en-US/API/Runtime/Core/Containers/FString/RightChop/1/
     MaxReflectivity = (uint8)FCString::Atoi(*Surface.RightChop(16));
+
     if (MaxReflectivity > 100)
     {
       MinReflectivity = 101;
@@ -262,6 +284,7 @@ uint8 UOusterBaseComponent::GetIntensity(const FString Surface, const float Dist
 
   return (uint8)((MinReflectivity - MaxReflectivity) / (Sensor.MaxRange - Sensor.MinRange) * Distance +
                  MaxReflectivity);
+  */
 }
 
 float UOusterBaseComponent::GenerateGaussianNoise(float mean, float stdDev)
@@ -274,7 +297,7 @@ float UOusterBaseComponent::GenerateGaussianNoise(float mean, float stdDev)
 }
 
 // Function to generate 3D noise based on a normal distribution
-FVector Generate3DNoise(float StandardDeviation)
+FVector UOusterBaseComponent::Generate3DNoise(float StandardDeviation)
 {
   // Static is used here for efficiency, so the engine is only constructed once.
   static std::default_random_engine Generator;
@@ -291,28 +314,6 @@ FVector Generate3DNoise(float StandardDeviation)
   return FVector(NoiseX, NoiseY, NoiseZ);
 }
 
-float UOusterBaseComponent::GetNoiseValue(FHitResult result)
-{
-  float intensity = 255;
-
-  auto PhysMat = result.PhysMaterial;
-
-  if (PhysMat != nullptr)
-  {
-    intensity = GetIntensity(*PhysMat->GetName(), (result.Distance * 2) / 10);
-  }
-
-  // normalize values
-  float quality = (intensity) / 255;
-
-  float randomNoise = GenerateGaussianNoise(0, NoiseStd);
-
-  // the noise is dependent on distance and reflectivity
-
-  float Noise = randomNoise * (1 - quality);
-
-  return Noise;
-}
 // Function to calculate rotation noise based on azimuth, frequency, amplitude, and current time
 FRotator CalculateRotationNoise(float Azimuth, float Frequency, float Amplitude, float CurrentTime)
 {
@@ -383,7 +384,7 @@ void UOusterBaseComponent::GetScanData()
   Sensor.Transform = Owner->GetTransform();
 
   // Initialize array for raycast result
-  Sensor.RecordedHits.Init(FHitResult(ForceInit), Sensor.VerticalResolution * Sensor.HorizontalResolution);
+  Sensor.RecordedHits.Init(std::make_pair(FHitResult(ForceInit), FRotator(0.f,0.f,0.f)) , Sensor.VerticalResolution * Sensor.HorizontalResolution);
 
   // Calculate batch size for 'ParallelFor' based on workable thread
 
@@ -479,7 +480,7 @@ void UOusterBaseComponent::GetScanData()
                 result.Location += noiseVector;
               }*/
 
-            Sensor.RecordedHits[Index] = result;
+            Sensor.RecordedHits[Index] = std::make_pair(result, Rotation);
           };
         },
         !SupportMultithread);
@@ -516,6 +517,17 @@ void AddStringToTArray(TArray<uint8>& arr, const FString& str)
   {
     arr.Add(c);
   }
+}
+
+FVector UOusterBaseComponent::CreateLocationNoise(const FHitResult hit)
+{
+  float a = 1 / (Sensor.MaxRange - Sensor.MinRange), b = Sensor.MinRange;
+  float noiseScalar = (1 - (a) * (hit.Distance - b));
+  /*if(Index % 433 == 0)
+    UE_LOG(LogTemp, Warning, TEXT("Noise Scalar: %f"), noiseScalar);*/
+  FVector noiseVector = Generate3DNoise(Sensor.NoiseStd);
+  noiseVector *= noiseScalar;
+  return hit.Location + noiseVector;
 }
 
 void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
@@ -573,20 +585,16 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 
       for (uint32_t i = StartAt; i < EndAt; i++)
       {
-        if (!Sensor.RecordedHits[i].IsValidBlockingHit())
+        if (!Sensor.RecordedHits[i].first.IsValidBlockingHit())
         {
           continue;
         }
         // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket in forloop: %d"), i);
-
-        FVector Location = Sensor.RecordedHits[i].Location;
-        float a = 1 / (Sensor.MaxRange - Sensor.MinRange), b = Sensor.MinRange;
-        float noiseScalar = (1 - (a) * (Sensor.RecordedHits[i].Distance - b));
-        /*if(Index % 433 == 0)
-          UE_LOG(LogTemp, Warning, TEXT("Noise Scalar: %f"), noiseScalar);*/
-        FVector noiseVector = Generate3DNoise(Sensor.NoiseStd);
-        noiseVector *= noiseScalar;
-        Location += noiseVector;
+        FHitResult hit = Sensor.RecordedHits[i].first;
+        FVector Location = CreateLocationNoise(hit);
+        FRotator Rotation = Sensor.RecordedHits[i].second;
+        FVector HitNormal = hit.ImpactNormal;
+      
         // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
         FVector RelativeLocation = Sensor.Transform.InverseTransformPosition(Location);
         // RelativeLocation = LidarRotation.UnrotateVector(RelativeLocation);
@@ -598,10 +606,10 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 
         // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after location: %f"), Point.x);
 
-        auto PhysMat = Sensor.RecordedHits[i].PhysMaterial;
+        auto PhysMat = hit.PhysMaterial;
         if (PhysMat != nullptr)
         {
-          Point.intensity = GetIntensity(*PhysMat->GetName(), (Sensor.RecordedHits[i].Distance));
+          Point.intensity = GetIntensity(Sensor.RecordedHits[i]);
         }
         else
         {
