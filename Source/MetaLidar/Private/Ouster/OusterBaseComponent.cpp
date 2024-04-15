@@ -27,8 +27,9 @@ UOusterBaseComponent::UOusterBaseComponent()
   PositionPort = 8308;
   PacketSeq = 0;
   UE_LOG(LogTemp, Warning, TEXT("Recommended number of workers: %d"), FPlatformMisc::NumberOfWorkerThreadsToSpawn());
-  ThreadNumScan = FMath::Max(FMath::RoundToInt(FPlatformMisc::NumberOfWorkerThreadsToSpawn()*0.1588 + 0.7978), 1); //calculated based on the number of cores
-  ThreadNumPackage = FMath::Max(FMath::RoundToInt(FPlatformMisc::NumberOfWorkerThreadsToSpawn()*0.4127 + 0.5611), 1);
+  ThreadNumScan = FMath::Max(FMath::RoundToInt(FPlatformMisc::NumberOfWorkerThreadsToSpawn() * 0.1588 + 0.7978),
+                             1);  // calculated based on the number of cores
+  ThreadNumPackage = FMath::Max(FMath::RoundToInt(FPlatformMisc::NumberOfWorkerThreadsToSpawn() * 0.4127 + 0.5611), 1);
   UE_LOG(LogTemp, Warning, TEXT("ThreadNum scan: %d"), ThreadNumScan);
   UE_LOG(LogTemp, Warning, TEXT("ThreadNum package: %d"), ThreadNumPackage);
 }
@@ -250,7 +251,7 @@ uint8 UOusterBaseComponent::GetIntensity(std::pair<FHitResult, FRotator> hitPair
   float Distance = Hit.Distance;
 
   FRotator Rotation = hitPair.second;
-  FVector StartingVector =  UKismetMathLibrary::GetForwardVector(Rotation);
+  FVector StartingVector = UKismetMathLibrary::GetForwardVector(Rotation);
   FVector NormalVector = Hit.ImpactNormal;
   float DotProduct = FVector::DotProduct(StartingVector, NormalVector);
   float lengths = StartingVector.Size() * NormalVector.Size();
@@ -261,30 +262,30 @@ uint8 UOusterBaseComponent::GetIntensity(std::pair<FHitResult, FRotator> hitPair
 
   // Calculate the intensity based on the distance
   return (uint8)(cos * maxReflectivity);
-/*  FString Surface = Hit.PhysMaterial->GetName();
-  
-  uint8 MaxReflectivity = 0;
-  uint8 MinReflectivity = 0;
+  /*  FString Surface = Hit.PhysMaterial->GetName();
 
-  if (Surface.Contains(TEXT("PM_Reflectivity_"), ESearchCase::CaseSensitive))
-  {
-    // https://docs.unrealengine.com/5.0/en-US/API/Runtime/Core/Containers/FString/RightChop/1/
-    MaxReflectivity = (uint8)FCString::Atoi(*Surface.RightChop(16));
+    uint8 MaxReflectivity = 0;
+    uint8 MinReflectivity = 0;
 
-    if (MaxReflectivity > 100)
+    if (Surface.Contains(TEXT("PM_Reflectivity_"), ESearchCase::CaseSensitive))
     {
-      MinReflectivity = 101;
-    }
-  }
-  else
-  {  // Default PhysicalMaterial value, in case of the PhysicalMaterial is
-     // not applied
-    MaxReflectivity = 100;
-  }
+      // https://docs.unrealengine.com/5.0/en-US/API/Runtime/Core/Containers/FString/RightChop/1/
+      MaxReflectivity = (uint8)FCString::Atoi(*Surface.RightChop(16));
 
-  return (uint8)((MinReflectivity - MaxReflectivity) / (Sensor.MaxRange - Sensor.MinRange) * Distance +
-                 MaxReflectivity);
-  */
+      if (MaxReflectivity > 100)
+      {
+        MinReflectivity = 101;
+      }
+    }
+    else
+    {  // Default PhysicalMaterial value, in case of the PhysicalMaterial is
+       // not applied
+      MaxReflectivity = 100;
+    }
+
+    return (uint8)((MinReflectivity - MaxReflectivity) / (Sensor.MaxRange - Sensor.MinRange) * Distance +
+                   MaxReflectivity);
+    */
 }
 
 float UOusterBaseComponent::GenerateGaussianNoise(float mean, float stdDev)
@@ -368,6 +369,25 @@ void ShuffleArray(TArray<T>& ArrayToShuffle)
   }
 }
 
+FRotator UOusterBaseComponent::GetLidarRotation(float Azimuth, float Elevation, FRotator lidarRotation)
+{
+  FRotator Rotation(0.f, 0.f, 0.f);
+  Rotation.Add(Elevation, Azimuth, 0.f);
+  Rotation = UKismetMathLibrary::ComposeRotators(Rotation, lidarRotation);
+  return Rotation;
+}
+
+FRotator UOusterBaseComponent::AddRotationNoise(FRotator Rotation, float frequency, float amplitude, float azimuth)
+{
+  FRotator noise =
+      CalculateRotationNoise(azimuth, frequency, amplitude, FPlatformTime::Seconds());
+  FQuat Quat = FQuat(noise);
+  FQuat Quat2 = FQuat(Rotation);
+  FQuat NoiseCombined = Quat * Quat2;
+  Rotation = NoiseCombined.Rotator();
+  return Rotation;
+}
+
 void UOusterBaseComponent::GetScanData()
 {
   // complex collisions: true
@@ -384,7 +404,8 @@ void UOusterBaseComponent::GetScanData()
   Sensor.Transform = Owner->GetTransform();
 
   // Initialize array for raycast result
-  Sensor.RecordedHits.Init(std::make_pair(FHitResult(ForceInit), FRotator(0.f,0.f,0.f)) , Sensor.VerticalResolution * Sensor.HorizontalResolution);
+  Sensor.RecordedHits.Init(std::make_pair(FHitResult(ForceInit), FRotator(0.f, 0.f, 0.f)),
+                           Sensor.VerticalResolution * Sensor.HorizontalResolution);
 
   // Calculate batch size for 'ParallelFor' based on workable thread
 
@@ -398,8 +419,6 @@ void UOusterBaseComponent::GetScanData()
   ThreadNumScan = numberOfCoresInSecond[TimeFromStart % 6];
   if(ThreadNumScan != prevThreadNumScan)
   UE_LOG(LogTemp, Warning, TEXT("ThreadNum: %d"), ThreadNumScan);*/
-  
-
 
   const int DivideEnd = FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNumScan));
   int count = 0;
@@ -416,49 +435,25 @@ void UOusterBaseComponent::GetScanData()
           // the hits.
           int StartAt = PFIndex * DivideEnd;
           if (StartAt >= Sensor.RecordedHits.Num())
-          {
             return;
-          }
+          
 
           int EndAt = StartAt + DivideEnd;
           if (PFIndex == (ThreadNumScan - 1))
-          {
             EndAt = Sensor.RecordedHits.Num();
-          }
-
-          // UE_LOG(LogTemp, Warning, TEXT("Rotation: %f"), LidarRotation.Yaw);
-          // UE_LOG(LogTemp, Warning, TEXT("Location: %f"), LidarPosition.X);
-
+          
           for (int32 Index = StartAt; Index < EndAt; ++Index)
           {
             float Azimuth, Elevation;
-            FRotator Rotation;
-            {
 
-              TRACE_CPUPROFILER_EVENT_SCOPE_STR("Position calculation inside loop")
-
-              Azimuth = horizontalStepAngle * FMath::FloorToInt((float)(Index / Sensor.VerticalResolution));
-              Elevation = Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
-
-              /*if (count++ % 50 == 0)
-                UE_LOG(LogTemp, Warning, TEXT("Azimuth: %f, Elevation: %f"), Azimuth, Elevation);*/
-
-              FRotator LaserRotation(0.f, 0.f, 0.f);
-
-              LaserRotation.Add(Elevation, Azimuth, 0.f);
-
-              Rotation = UKismetMathLibrary::ComposeRotators(LaserRotation, LidarRotation);
-            }
+            Azimuth = horizontalStepAngle * FMath::FloorToInt((float)(Index / Sensor.VerticalResolution));
+            Elevation = Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
+            FRotator Rotation = GetLidarRotation(Azimuth, Elevation, LidarRotation);
+            Rotation = AddRotationNoise(Rotation, Sensor.NoiseFrequency, Sensor.NoiseAmplitude, Azimuth);
 
             FVector EndPoint, BeginPoint;
             {
               TRACE_CPUPROFILER_EVENT_SCOPE_STR("Noise calculation inside loop")
-              FRotator noise = CalculateRotationNoise(Azimuth, Sensor.NoiseFrequency, Sensor.NoiseAmplitude,
-                                                      FPlatformTime::Seconds());
-              FQuat Quat = FQuat(noise);
-              FQuat Quat2 = FQuat(Rotation);
-              FQuat NoiseCombined = Quat * Quat2;
-              Rotation = NoiseCombined.Rotator();
 
               BeginPoint = LidarPosition + Sensor.MinRange * UKismetMathLibrary::GetForwardVector(Rotation);
               EndPoint = LidarPosition + Sensor.MaxRange * UKismetMathLibrary::GetForwardVector(Rotation);
@@ -469,17 +464,6 @@ void UOusterBaseComponent::GetScanData()
               GetWorld()->LineTraceSingleByChannel(result, BeginPoint, EndPoint, ECC_Visibility, TraceParams,
                                                    FCollisionResponseParams::DefaultResponseParam);
             };
-            /*  if (result.IsValidBlockingHit())
-              {
-                float a = 1/(Sensor.MaxRange - Sensor.MinRange),b = Sensor.MinRange;
-                float noiseScalar = (1 - (a)*(result.Distance- b));
-                if(Index % 433 == 0)
-                  UE_LOG(LogTemp, Warning, TEXT("Noise Scalar: %f"), noiseScalar);
-                FVector noiseVector = Generate3DNoise(Sensor.NoiseStd);
-                noiseVector *= noiseScalar;
-                result.Location += noiseVector;
-              }*/
-
             Sensor.RecordedHits[Index] = std::make_pair(result, Rotation);
           };
         },
@@ -559,8 +543,6 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
     //      Sensor.RecordedHits.Num());
     AActor* Owner = GetOwner();
 
-
-
     const int DivideEnd = FMath::FloorToInt((float)(Sensor.RecordedHits.Num() / ThreadNumPackage));
     int count = 0;
     TArray<uint8> DataToCopyThread[ThreadNumPackage];
@@ -594,7 +576,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
         FVector Location = CreateLocationNoise(hit);
         FRotator Rotation = Sensor.RecordedHits[i].second;
         FVector HitNormal = hit.ImpactNormal;
-      
+
         // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
         FVector RelativeLocation = Sensor.Transform.InverseTransformPosition(Location);
         // RelativeLocation = LidarRotation.UnrotateVector(RelativeLocation);

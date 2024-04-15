@@ -181,4 +181,9 @@ private:
   uint32 CalculatePointStep(const TArray<PointField> &fields);
   // Function to get the size of the data type in bytes
   uint32 GetDataTypeSize(uint8 type);
+
+  FRotator GetLidarRotation(float Azimuth, float Elevation, FRotator LidarRotation);
+
+  FRotator AddRotationNoise(FRotator Rotation, float frequency, float amplitude, float azimuth);
+
 };
