@@ -8,6 +8,7 @@
 #include "Physics/PhysicsInterfaceCore.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "SharedStructure.h"
+#include <cstdint>
 #include <random>
 
 #include "OusterBaseComponent.generated.h"
@@ -186,4 +187,5 @@ private:
 
   FRotator AddRotationNoise(FRotator Rotation, float frequency, float amplitude, float azimuth);
 
+  uint8_t GetNoiseForIntensity(uint8_t intensity);
 };

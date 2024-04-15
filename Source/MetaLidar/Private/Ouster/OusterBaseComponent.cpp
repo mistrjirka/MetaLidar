@@ -119,7 +119,7 @@ void UOusterBaseComponent::ConfigureOusterSensor()
       Sensor.fields.Add(PointField(FString(TEXT("x")), 0, PointField::FLOAT32, 1));
       Sensor.fields.Add(PointField(FString(TEXT("y")), 4, PointField::FLOAT32, 1));
       Sensor.fields.Add(PointField(FString(TEXT("z")), 8, PointField::FLOAT32, 1));
-      Sensor.fields.Add(PointField(FString(TEXT("Intensity")), 12, PointField::UINT8, 1));
+      Sensor.fields.Add(PointField(FString(TEXT("intensity")), 12, PointField::UINT8, 1));
       ;
       Sensor.PointStep = this->CalculatePointStep(Sensor.fields);
       // UE_LOG(LogTemp, Warning, TEXT("PointStep: %d"), Sensor.PointStep);
@@ -242,51 +242,6 @@ void UOusterBaseComponent::ConfigureOusterSensor()
 // laser is shot skyward, both distance and
 //        reflectivity values will be 0. The key is a distance of 0, because 0
 //        is a valid reflectivity value (i.e. one step above noise).
-uint8 UOusterBaseComponent::GetIntensity(std::pair<FHitResult, FRotator> hitPair) const
-{
-  // Get the hit result from the pair
-  FHitResult Hit = hitPair.first;
-
-  // Get the distance from the hit result
-  float Distance = Hit.Distance;
-
-  FRotator Rotation = hitPair.second;
-  FVector StartingVector = UKismetMathLibrary::GetForwardVector(Rotation);
-  FVector NormalVector = Hit.ImpactNormal;
-  float DotProduct = FVector::DotProduct(StartingVector, NormalVector);
-  float lengths = StartingVector.Size() * NormalVector.Size();
-
-  float cos = DotProduct / lengths;
-
-  float maxReflectivity = 255 * (Sensor.MaxRange - Distance) / (Sensor.MaxRange - Sensor.MinRange);
-
-  // Calculate the intensity based on the distance
-  return (uint8)(cos * maxReflectivity);
-  /*  FString Surface = Hit.PhysMaterial->GetName();
-
-    uint8 MaxReflectivity = 0;
-    uint8 MinReflectivity = 0;
-
-    if (Surface.Contains(TEXT("PM_Reflectivity_"), ESearchCase::CaseSensitive))
-    {
-      // https://docs.unrealengine.com/5.0/en-US/API/Runtime/Core/Containers/FString/RightChop/1/
-      MaxReflectivity = (uint8)FCString::Atoi(*Surface.RightChop(16));
-
-      if (MaxReflectivity > 100)
-      {
-        MinReflectivity = 101;
-      }
-    }
-    else
-    {  // Default PhysicalMaterial value, in case of the PhysicalMaterial is
-       // not applied
-      MaxReflectivity = 100;
-    }
-
-    return (uint8)((MinReflectivity - MaxReflectivity) / (Sensor.MaxRange - Sensor.MinRange) * Distance +
-                   MaxReflectivity);
-    */
-}
 
 float UOusterBaseComponent::GenerateGaussianNoise(float mean, float stdDev)
 {
@@ -514,6 +469,34 @@ FVector UOusterBaseComponent::CreateLocationNoise(const FHitResult hit)
   return hit.Location + noiseVector;
 }
 
+uint8_t UOusterBaseComponent::GetNoiseForIntensity(uint8_t intensity)
+{
+  return (uint8_t)GenerateGaussianNoise((float)intensity, 10);
+}
+
+uint8 UOusterBaseComponent::GetIntensity(std::pair<FHitResult, FRotator> hitPair) const
+{
+  // Get the hit result from the pair
+  FHitResult Hit = hitPair.first;
+
+  // Get the distance from the hit result
+  float Distance = Hit.Distance;
+
+  FRotator Rotation = hitPair.second;
+  FVector StartingVector = UKismetMathLibrary::GetForwardVector(Rotation);
+  FVector NormalVector = Hit.ImpactNormal;
+  float DotProduct = FVector::DotProduct(StartingVector, NormalVector);
+  float lengths = StartingVector.Size() * NormalVector.Size();
+
+  float cos = DotProduct / lengths;
+
+  float maxReflectivity = 255 * (Sensor.MaxRange - Distance) / (Sensor.MaxRange - Sensor.MinRange);
+
+  // Calculate the intensity based on the distance
+  return (uint8)(cos * maxReflectivity);
+}
+
+
 void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 {
   TRACE_CPUPROFILER_EVENT_SCOPE_STR("Fancy work 1")
@@ -591,7 +574,7 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
         auto PhysMat = hit.PhysMaterial;
         if (PhysMat != nullptr)
         {
-          Point.intensity = GetIntensity(Sensor.RecordedHits[i]);
+          Point.intensity = GetNoiseForIntensity(GetIntensity(Sensor.RecordedHits[i]));
         }
         else
         {
