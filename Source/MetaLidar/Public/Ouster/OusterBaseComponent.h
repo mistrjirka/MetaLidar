@@ -62,7 +62,8 @@ public:
   float MaxRange;
   FString MemoryLabel;
   uint32 MemorySize;
-  float NoiseStd;
+  float ToFNoise;
+  float IntensityNoise;
   float NoiseFrequency;
   float NoiseAmplitude;
 
@@ -109,6 +110,7 @@ public:
 
   uint32 PacketSeq;
   uint32 MAX_PACKET_SIZE;
+  float baseTime;
 
   FOusterLidar Sensor;
 
@@ -185,7 +187,7 @@ private:
 
   FRotator GetLidarRotation(float Azimuth, float Elevation, FRotator LidarRotation);
 
-  FRotator AddRotationNoise(FRotator Rotation, float frequency, float amplitude, float azimuth);
+  FRotator AddRotationNoise(FRotator Rotation, float frequency, float amplitude, float azimuth, float time);
 
   uint8_t GetNoiseForIntensity(uint8_t intensity);
 };

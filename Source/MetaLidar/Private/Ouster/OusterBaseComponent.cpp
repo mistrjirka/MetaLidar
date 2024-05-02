@@ -3,9 +3,7 @@
 
 #include "Logging/LogMacros.h"
 #include <cstdint>
-#include <cstring>
-#include <utility>
-
+#include "DrawDebugHelpers.h"
 // Sets default values for this component's properties
 UOusterBaseComponent::UOusterBaseComponent()
 {
@@ -38,7 +36,7 @@ UOusterBaseComponent::UOusterBaseComponent()
 void UOusterBaseComponent::BeginPlay()
 {
   Super::BeginPlay();
-  FString TheFloatStr = FString::SanitizeFloat(NoiseStd);
+  this->baseTime = 0;
 
   ConfigureOusterSensor();
 }
@@ -90,8 +88,6 @@ void UOusterBaseComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 void UOusterBaseComponent::EndPlay(EEndPlayReason::Type Reason)
 {
-  FString TheFloatStr = FString::SanitizeFloat(NoiseStd);
-  UE_LOG(LogTemp, Warning, TEXT("%s"), *TheFloatStr);
   Super::EndPlay(Reason);
 }
 
@@ -126,7 +122,9 @@ void UOusterBaseComponent::ConfigureOusterSensor()
       Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep;
       Sensor.MinRange = 80.0f;
       Sensor.MaxRange = 12000.0f;
-      Sensor.NoiseStd = 1.8;
+      Sensor.IntensityNoise = 30.0;
+      Sensor.ToFNoise = 5.0;
+
       Sensor.NoiseFrequency = 233.7f;
       Sensor.NoiseAmplitude = 0.01f;
 
@@ -165,7 +163,8 @@ void UOusterBaseComponent::ConfigureOusterSensor()
       Sensor.MaxRange = 4000.0f;
       Sensor.MemoryLabel = "/t07ySQdKFH_meta_lidar";
       Sensor.MemorySize = 40000000;
-      Sensor.NoiseStd = 2.0;
+      Sensor.IntensityNoise = 30.0;
+      Sensor.ToFNoise = 5.0;
       Sensor.NoiseFrequency = 233.7f;
       Sensor.NoiseAmplitude = 0.01f;
       Sensor.PacketSize =
@@ -332,10 +331,9 @@ FRotator UOusterBaseComponent::GetLidarRotation(float Azimuth, float Elevation, 
   return Rotation;
 }
 
-FRotator UOusterBaseComponent::AddRotationNoise(FRotator Rotation, float frequency, float amplitude, float azimuth)
+FRotator UOusterBaseComponent::AddRotationNoise(FRotator Rotation, float frequency, float amplitude, float azimuth, float time)
 {
-  FRotator noise =
-      CalculateRotationNoise(azimuth, frequency, amplitude, FPlatformTime::Seconds());
+  FRotator noise = CalculateRotationNoise(azimuth, frequency, amplitude, time);
   FQuat Quat = FQuat(noise);
   FQuat Quat2 = FQuat(Rotation);
   FQuat NoiseCombined = Quat * Quat2;
@@ -347,6 +345,7 @@ void UOusterBaseComponent::GetScanData()
 {
   // complex collisions: true
   FCollisionQueryParams TraceParams = FCollisionQueryParams(TEXT("LaserTrace"), true, GetOwner());
+  
   TraceParams.bReturnPhysicalMaterial = true;
   TraceParams.bTraceComplex = true;
 
@@ -380,7 +379,6 @@ void UOusterBaseComponent::GetScanData()
 
   float horizontalStepAngle = (float)(360.f / (float)Sensor.HorizontalResolution);
   // UE_LOG(LogTemp, Warning, TEXT("Horizontal Step Angle: %f"), horizontalStepAngle);
-
   {
     TRACE_CPUPROFILER_EVENT_SCOPE_STR("ParallelFor loop inside GetScanData()")
     ParallelFor(
@@ -391,12 +389,11 @@ void UOusterBaseComponent::GetScanData()
           int StartAt = PFIndex * DivideEnd;
           if (StartAt >= Sensor.RecordedHits.Num())
             return;
-          
 
           int EndAt = StartAt + DivideEnd;
           if (PFIndex == (ThreadNumScan - 1))
             EndAt = Sensor.RecordedHits.Num();
-          
+
           for (int32 Index = StartAt; Index < EndAt; ++Index)
           {
             float Azimuth, Elevation;
@@ -404,7 +401,14 @@ void UOusterBaseComponent::GetScanData()
             Azimuth = horizontalStepAngle * FMath::FloorToInt((float)(Index / Sensor.VerticalResolution));
             Elevation = Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
             FRotator Rotation = GetLidarRotation(Azimuth, Elevation, LidarRotation);
-            Rotation = AddRotationNoise(Rotation, Sensor.NoiseFrequency, Sensor.NoiseAmplitude, Azimuth);
+
+            float virtualTime = baseTime + ((float)Index / (float)(Sensor.VerticalResolution * Sensor.HorizontalResolution)) * (1.f/Sensor.SamplingRate);
+            if(Index % 2048*48 == 0)
+            {
+              UE_LOG(LogTemp, Warning, TEXT("Virtual Time: %f index: %d result first %f the time for the part"), virtualTime, Index, (float)Index / (float)(Sensor.VerticalResolution * Sensor.HorizontalResolution), (1.f/Sensor.SamplingRate));
+            }
+
+            Rotation = AddRotationNoise(Rotation, Sensor.NoiseFrequency, Sensor.NoiseAmplitude, Azimuth, virtualTime);
 
             FVector EndPoint, BeginPoint;
             {
@@ -418,11 +422,29 @@ void UOusterBaseComponent::GetScanData()
               TRACE_CPUPROFILER_EVENT_SCOPE_STR("LineTraceSingleByChannel inside loop")
               GetWorld()->LineTraceSingleByChannel(result, BeginPoint, EndPoint, ECC_Visibility, TraceParams,
                                                    FCollisionResponseParams::DefaultResponseParam);
+
+            
             };
             Sensor.RecordedHits[Index] = std::make_pair(result, Rotation);
           };
         },
         !SupportMultithread);
+
+    baseTime += 1.f/Sensor.SamplingRate; 
+  /*  for(int i = 0; i < Sensor.RecordedHits.Num(); i++)
+    {
+      if(Sensor.RecordedHits[i].first.IsValidBlockingHit())
+      {
+        FVector Location = Sensor.RecordedHits[i].first.Location;
+        FVector Normal = Sensor.RecordedHits[i].first.ImpactNormal;
+        FVector Start = Sensor.RecordedHits[i].first.TraceStart;
+        FVector End = Sensor.RecordedHits[i].first.TraceEnd;
+        
+      }
+    }
+  }*/
+          //DrawDebugLine(GetWorld(), BeginPoint, EndPoint, FColor::Red, false, -1, 0, 10.0f);
+
   }
 }
 
@@ -462,16 +484,24 @@ FVector UOusterBaseComponent::CreateLocationNoise(const FHitResult hit)
 {
   float a = 1 / (Sensor.MaxRange - Sensor.MinRange), b = Sensor.MinRange;
   float noiseScalar = (1 - (a) * (hit.Distance - b));
-  /*if(Index % 433 == 0)
-    UE_LOG(LogTemp, Warning, TEXT("Noise Scalar: %f"), noiseScalar);*/
-  FVector noiseVector = Generate3DNoise(Sensor.NoiseStd);
-  noiseVector *= noiseScalar;
-  return hit.Location + noiseVector;
+  
+  FVector TraceStart = hit.TraceStart;
+  FVector TraceEnd = hit.TraceEnd;
+
+  // Now you have the start and end points of the trace
+  // You can use these to calculate the trace vector
+  FVector TraceVector = (TraceEnd - TraceStart).GetSafeNormal();;
+  
+  float noiseMultiplier = GenerateGaussianNoise(0.0f, noiseScalar * Sensor.ToFNoise);
+  
+  //noiseVector *= noiseScalar;
+  FVector ToFNoise = TraceVector * noiseMultiplier * 1.2;
+  return hit.Location + ToFNoise;
 }
 
 uint8_t UOusterBaseComponent::GetNoiseForIntensity(uint8_t intensity)
 {
-  return (uint8_t)GenerateGaussianNoise((float)intensity, 10);
+  return (uint8_t)GenerateGaussianNoise((float)intensity, Sensor.IntensityNoise);
 }
 
 uint8 UOusterBaseComponent::GetIntensity(std::pair<FHitResult, FRotator> hitPair) const
@@ -488,14 +518,15 @@ uint8 UOusterBaseComponent::GetIntensity(std::pair<FHitResult, FRotator> hitPair
   float DotProduct = FVector::DotProduct(StartingVector, NormalVector);
   float lengths = StartingVector.Size() * NormalVector.Size();
 
-  float cos = DotProduct / lengths;
+  float cos = UKismetMathLibrary::Abs(DotProduct / lengths);
+
+  // float sin = FMath::Sqrt(1 - cos * cos);
 
   float maxReflectivity = 255 * (Sensor.MaxRange - Distance) / (Sensor.MaxRange - Sensor.MinRange);
 
   // Calculate the intensity based on the distance
   return (uint8)(cos * maxReflectivity);
 }
-
 
 void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 {
