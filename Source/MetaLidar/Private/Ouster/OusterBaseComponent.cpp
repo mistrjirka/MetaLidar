@@ -108,25 +108,26 @@ void UOusterBaseComponent::ConfigureOusterSensor()
                             12.6f,  12.9f,  13.3f,  13.6f,  14.0f,  14.4f,  14.7f,  15.1f,  15.4f,  15.8f,  16.1f,
                             16.5f,  16.8f,  17.2f,  17.5f,  17.9f,  18.2f,  18.6f,  19.0f,  19.3f,  19.7f,  20.0f,
                             20.4f,  20.7f,  21.1f,  21.4f,  21.8f,  22.1f,  22.5f };
-      
+
       std::vector<std::pair<double, double>> parameters = {
-        {1.8753017750691958e-19, 0.05901539148337825},
-        {1.464539727069229e-18, 0.06439269486177919},
-        {1.1247906706539403e-21, 0.013635834916107004},
-        {-1.139852469707196e-20, 0.01198681212066085},
-        {-6.927628414709477e-21, 0.009951458492233905},
-        {-1.3534798191372023e-20, 0.008437112284366298},
-        {-8.613847823557311e-21, 0.00760091708613785},
-        {3.261011185460277e-20, 0.007303551441709429},
-        {6.3864647067714944e-21, 0.007941859930217031},
-        {4.5411609318764583e-20, 0.007384982146328676},
-        {-6.385485187644689e-21, 0.007468842983027588},
-        {-6.235934063968914e-20, 0.008584560129172433},
-        {-1.8797313207179025e-20, 0.007688384994216831},
-        {-1.8707802191906744e-19, 0.007090855854068529},
-        {2.0501277443362265e-19, 0.006083634024781646}
+        {9.682262910120329e-20, 0.05099413638162513},
+        {-2.312701453815963e-20, 0.0859635118502373},
+        {-2.013560328110606e-19, 0.033198821663645635},
+        {3.624554967070408e-19, 0.060609963660023775},
+        {1.8178738863901138e-18, 0.04584644732453229},
+        {4.685580310922071e-21, 0.01502530303019364},
+        {-1.2050801052803727e-21, 0.014204441894820475},
+        {1.3253493061719702e-21, 0.013665059576404898},
+        {1.1590112878709345e-18, 0.04998633334781023},
+        {-1.0966304168193426e-20, 0.011943805862212574},
+        {-1.4105504116093882e-20, 0.011300632463552422},
+        {1.3538424630412126e-21, 0.010506545507936546},
+        {9.822412591695363e-21, 0.00957612081762527},
+        {4.5088753293487835e-21, 0.008920589051154872},
+        {4.9770906662813354e-21, 0.008459166324749341},
+        {6.978618346804423e-21, 0.008896720273648719}
       };
-      
+          
       Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
       Sensor.VerticalResolution = 128;
       Sensor.SamplingRate = EOusterFrequency::SRO05;
@@ -167,8 +168,6 @@ void UOusterBaseComponent::ConfigureOusterSensor()
                             7.9f,   8.1f,   8.2f,   8.4f,   8.6f,   8.8f,   8.9f,   9.1f,   9.3f,  9.5f,  9.7f,  9.8f,
                             10.0f,  10.2f,  10.4f,  10.5f,  10.7f,  10.9f,  11.1f,  11.2f };
 
-
-      
       Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
       Sensor.VerticalResolution = 128;
       Sensor.SamplingRate = EOusterFrequency::SRO05;
@@ -353,7 +352,8 @@ FRotator UOusterBaseComponent::GetLidarRotation(float Azimuth, float Elevation, 
   return Rotation;
 }
 
-FRotator UOusterBaseComponent::AddRotationNoise(FRotator Rotation, float frequency, float amplitude, float azimuth, float time)
+FRotator UOusterBaseComponent::AddRotationNoise(FRotator Rotation, float frequency, float amplitude, float azimuth,
+                                                float time)
 {
   FRotator noise = CalculateRotationNoise(azimuth, frequency, amplitude, time);
   FQuat Quat = FQuat(noise);
@@ -367,7 +367,7 @@ void UOusterBaseComponent::GetScanData()
 {
   // complex collisions: true
   FCollisionQueryParams TraceParams = FCollisionQueryParams(TEXT("LaserTrace"), true, GetOwner());
-  
+
   TraceParams.bReturnPhysicalMaterial = true;
   TraceParams.bTraceComplex = true;
 
@@ -424,10 +424,15 @@ void UOusterBaseComponent::GetScanData()
             Elevation = Sensor.ElevationAngle[Index % Sensor.VerticalResolution];
             FRotator Rotation = GetLidarRotation(Azimuth, Elevation, LidarRotation);
 
-            float virtualTime = baseTime + ((float)Index / (float)(Sensor.VerticalResolution * Sensor.HorizontalResolution)) * (1.f/Sensor.SamplingRate);
-            if(Index % 2048*48 == 0)
+            float virtualTime =
+                baseTime + ((float)Index / (float)(Sensor.VerticalResolution * Sensor.HorizontalResolution)) *
+                               (1.f / Sensor.SamplingRate);
+            if (Index % 2048 * 48 == 0)
             {
-              UE_LOG(LogTemp, Warning, TEXT("Virtual Time: %f index: %d result first %f the time for the part"), virtualTime, Index, (float)Index / (float)(Sensor.VerticalResolution * Sensor.HorizontalResolution), (1.f/Sensor.SamplingRate));
+              UE_LOG(LogTemp, Warning, TEXT("Virtual Time: %f index: %d result first %f the time for the part"),
+                     virtualTime, Index,
+                     (float)Index / (float)(Sensor.VerticalResolution * Sensor.HorizontalResolution),
+                     (1.f / Sensor.SamplingRate));
             }
 
             Rotation = AddRotationNoise(Rotation, Sensor.NoiseFrequency, Sensor.NoiseAmplitude, Azimuth, virtualTime);
@@ -444,29 +449,26 @@ void UOusterBaseComponent::GetScanData()
               TRACE_CPUPROFILER_EVENT_SCOPE_STR("LineTraceSingleByChannel inside loop")
               GetWorld()->LineTraceSingleByChannel(result, BeginPoint, EndPoint, ECC_Visibility, TraceParams,
                                                    FCollisionResponseParams::DefaultResponseParam);
-
-            
             };
             Sensor.RecordedHits[Index] = std::make_pair(result, Rotation);
           };
         },
         !SupportMultithread);
 
-    baseTime += 1.f/Sensor.SamplingRate; 
-  /*  for(int i = 0; i < Sensor.RecordedHits.Num(); i++)
-    {
-      if(Sensor.RecordedHits[i].first.IsValidBlockingHit())
+    baseTime += 1.f / Sensor.SamplingRate;
+    /*  for(int i = 0; i < Sensor.RecordedHits.Num(); i++)
       {
-        FVector Location = Sensor.RecordedHits[i].first.Location;
-        FVector Normal = Sensor.RecordedHits[i].first.ImpactNormal;
-        FVector Start = Sensor.RecordedHits[i].first.TraceStart;
-        FVector End = Sensor.RecordedHits[i].first.TraceEnd;
-        
-      }
-    }
-  }*/
-          //DrawDebugLine(GetWorld(), BeginPoint, EndPoint, FColor::Red, false, -1, 0, 10.0f);
+        if(Sensor.RecordedHits[i].first.IsValidBlockingHit())
+        {
+          FVector Location = Sensor.RecordedHits[i].first.Location;
+          FVector Normal = Sensor.RecordedHits[i].first.ImpactNormal;
+          FVector Start = Sensor.RecordedHits[i].first.TraceStart;
+          FVector End = Sensor.RecordedHits[i].first.TraceEnd;
 
+        }
+      }
+    }*/
+    // DrawDebugLine(GetWorld(), BeginPoint, EndPoint, FColor::Red, false, -1, 0, 10.0f);
   }
 }
 
@@ -506,17 +508,18 @@ FVector UOusterBaseComponent::CreateLocationNoise(const FHitResult hit)
 {
   float a = 1 / (Sensor.MaxRange - Sensor.MinRange), b = Sensor.MinRange;
   float noiseScalar = (1 - (a) * (hit.Distance - b));
-  
+
   FVector TraceStart = hit.TraceStart;
   FVector TraceEnd = hit.TraceEnd;
 
   // Now you have the start and end points of the trace
   // You can use these to calculate the trace vector
-  FVector TraceVector = (TraceEnd - TraceStart).GetSafeNormal();;
-  
+  FVector TraceVector = (TraceEnd - TraceStart).GetSafeNormal();
+  ;
+
   float noiseMultiplier = GenerateGaussianNoise(0.0f, noiseScalar * Sensor.ToFNoise);
-  
-  //noiseVector *= noiseScalar;
+
+  // noiseVector *= noiseScalar;
   FVector ToFNoise = TraceVector * noiseMultiplier * 1.2;
   return hit.Location + ToFNoise;
 }
