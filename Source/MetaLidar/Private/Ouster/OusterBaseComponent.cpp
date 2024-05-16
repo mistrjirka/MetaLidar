@@ -3,6 +3,7 @@
 
 #include "Logging/LogMacros.h"
 #include <cstdint>
+#include <utility>
 #include "DrawDebugHelpers.h"
 // Sets default values for this component's properties
 UOusterBaseComponent::UOusterBaseComponent()
@@ -109,7 +110,8 @@ void UOusterBaseComponent::ConfigureOusterSensor()
                             16.5f,  16.8f,  17.2f,  17.5f,  17.9f,  18.2f,  18.6f,  19.0f,  19.3f,  19.7f,  20.0f,
                             20.4f,  20.7f,  21.1f,  21.4f,  21.8f,  22.1f,  22.5f };
 
-      std::vector<std::pair<double, double>> parameters = {
+
+      std::pair<double,double> NoisePairs[] = {
         {9.682262910120329e-20, 0.05099413638162513},
         {-2.312701453815963e-20, 0.0859635118502373},
         {-2.013560328110606e-19, 0.033198821663645635},
@@ -127,6 +129,7 @@ void UOusterBaseComponent::ConfigureOusterSensor()
         {4.9770906662813354e-21, 0.008459166324749341},
         {6.978618346804423e-21, 0.008896720273648719}
       };
+      Sensor.Noise = TArray<std::pair<double, double>>(NoisePairs, UE_ARRAY_COUNT(NoisePairs));
           
       Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
       Sensor.VerticalResolution = 128;
@@ -167,6 +170,26 @@ void UOusterBaseComponent::ConfigureOusterSensor()
                             5.8f,   5.9f,   6.1f,   6.3f,   6.5f,   6.6f,   6.8f,   7.0f,   7.2f,  7.4f,  7.5f,  7.7f,
                             7.9f,   8.1f,   8.2f,   8.4f,   8.6f,   8.8f,   8.9f,   9.1f,   9.3f,  9.5f,  9.7f,  9.8f,
                             10.0f,  10.2f,  10.4f,  10.5f,  10.7f,  10.9f,  11.1f,  11.2f };
+
+      std::pair<double,double> NoisePairs[] = {
+        {9.682262910120329e-20, 0.05099413638162513},
+        {-2.312701453815963e-20, 0.0859635118502373},
+        {-2.013560328110606e-19, 0.033198821663645635},
+        {3.624554967070408e-19, 0.060609963660023775},
+        {1.8178738863901138e-18, 0.04584644732453229},
+        {4.685580310922071e-21, 0.01502530303019364},
+        {-1.2050801052803727e-21, 0.014204441894820475},
+        {1.3253493061719702e-21, 0.013665059576404898},
+        {1.1590112878709345e-18, 0.04998633334781023},
+        {-1.0966304168193426e-20, 0.011943805862212574},
+        {-1.4105504116093882e-20, 0.011300632463552422},
+        {1.3538424630412126e-21, 0.010506545507936546},
+        {9.822412591695363e-21, 0.00957612081762527},
+        {4.5088753293487835e-21, 0.008920589051154872},
+        {4.9770906662813354e-21, 0.008459166324749341},
+        {6.978618346804423e-21, 0.008896720273648719}
+      };
+      Sensor.Noise = TArray<std::pair<double, double>>(NoisePairs, UE_ARRAY_COUNT(NoisePairs));
 
       Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
       Sensor.VerticalResolution = 128;
@@ -435,7 +458,7 @@ void UOusterBaseComponent::GetScanData()
                      (1.f / Sensor.SamplingRate));
             }
 
-            Rotation = AddRotationNoise(Rotation, Sensor.NoiseFrequency, Sensor.NoiseAmplitude, Azimuth, virtualTime);
+            //Rotation = AddRotationNoise(Rotation, Sensor.NoiseFrequency, Sensor.NoiseAmplitude, Azimuth, virtualTime);
 
             FVector EndPoint, BeginPoint;
             {
@@ -504,23 +527,23 @@ void AddStringToTArray(TArray<uint8>& arr, const FString& str)
   }
 }
 
-FVector UOusterBaseComponent::CreateLocationNoise(const FHitResult hit)
+FVector UOusterBaseComponent::CreateLocationNoise(const FHitResult hit, uint8_t intensity)
 {
-  float a = 1 / (Sensor.MaxRange - Sensor.MinRange), b = Sensor.MinRange;
-  float noiseScalar = (1 - (a) * (hit.Distance - b));
-
+  // Now you have the start and end points of the trace
+  // You can use these to calculate the trace vector
   FVector TraceStart = hit.TraceStart;
   FVector TraceEnd = hit.TraceEnd;
 
-  // Now you have the start and end points of the trace
-  // You can use these to calculate the trace vector
   FVector TraceVector = (TraceEnd - TraceStart).GetSafeNormal();
-  ;
-
-  float noiseMultiplier = GenerateGaussianNoise(0.0f, noiseScalar * Sensor.ToFNoise);
+  
+  // get parameters for the standard distribution
+  float mean = 0.0f;
+  float stdDev = 1.0f;
+  int index = FMath::Min(FMath::FloorToInt(intensity / ((255.f)/(float)Sensor.Noise.Num())), Sensor.Noise.Num() - 1);  
+  float noiseMultiplier = GenerateGaussianNoise(Sensor.Noise[index].first*100, Sensor.Noise[index].second*100);
 
   // noiseVector *= noiseScalar;
-  FVector ToFNoise = TraceVector * noiseMultiplier * 1.2;
+  FVector ToFNoise = TraceVector * noiseMultiplier;
   return hit.Location + ToFNoise;
 }
 
@@ -610,23 +633,10 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
         {
           continue;
         }
+        PointXYZI Point;
+
         // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket in forloop: %d"), i);
         FHitResult hit = Sensor.RecordedHits[i].first;
-        FVector Location = CreateLocationNoise(hit);
-        FRotator Rotation = Sensor.RecordedHits[i].second;
-        FVector HitNormal = hit.ImpactNormal;
-
-        // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
-        FVector RelativeLocation = Sensor.Transform.InverseTransformPosition(Location);
-        // RelativeLocation = LidarRotation.UnrotateVector(RelativeLocation);
-        //   Rotate the point around the origin
-        PointXYZI Point;
-        Point.x = RelativeLocation.X / 100.f;
-        Point.y = -RelativeLocation.Y / 100.f;
-        Point.z = RelativeLocation.Z / 100.f;
-
-        // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after location: %f"), Point.x);
-
         auto PhysMat = hit.PhysMaterial;
         if (PhysMat != nullptr)
         {
@@ -636,6 +646,21 @@ void UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp)
         {
           Point.intensity = 0.f;
         }
+        FVector Location = CreateLocationNoise(hit, Point.intensity);
+        FRotator Rotation = Sensor.RecordedHits[i].second;
+        FVector HitNormal = hit.ImpactNormal;
+
+        // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
+        FVector RelativeLocation = Sensor.Transform.InverseTransformPosition(Location);
+        // RelativeLocation = LidarRotation.UnrotateVector(RelativeLocation);
+        //   Rotate the point around the origin
+        Point.x = RelativeLocation.X / 100.f;
+        Point.y = -RelativeLocation.Y / 100.f;
+        Point.z = RelativeLocation.Z / 100.f;
+
+        // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket after location: %f"), Point.x);
+
+        
 
         DataToCopySize[PFIndex] += 1;
 

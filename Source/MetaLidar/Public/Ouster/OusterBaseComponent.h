@@ -66,6 +66,7 @@ public:
   float IntensityNoise;
   float NoiseFrequency;
   float NoiseAmplitude;
+  TArray<std::pair<double, double>> Noise;
 
 };
 
@@ -138,7 +139,7 @@ public:
    */
   FRotator GetActorRotation();
 
-  FVector CreateLocationNoise(const FHitResult point);
+  FVector CreateLocationNoise(const FHitResult point, uint8_t intensity);
 
   FVector Generate3DNoise(float stdDev);
 
