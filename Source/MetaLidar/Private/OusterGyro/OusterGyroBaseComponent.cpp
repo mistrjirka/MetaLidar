@@ -9,6 +9,11 @@ UOusterGyroBaseComponent::UOusterGyroBaseComponent()
   this->Sensor.MemorySize = (sizeof(OusterGyroData) + sizeof(MemoryPacket)) * 2;
   this->PacketSeq = 0;
   this->LastTimeSnapshotStamp = 0;
+  this->CurrentPosition = FVector(0, 0, 0);
+
+  FMemory::Memset(&this->OdomData, 0, sizeof(Odometry));
+
+
 }
 
 void UOusterGyroBaseComponent::BeginPlay()
@@ -140,16 +145,21 @@ bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
   {
     TRACE_CPUPROFILER_EVENT_SCOPE_STR("Gyro generation")
     float TimeBetween = (TimeStamp - LastTimeStamp) / 1000000.0;
-
     if (TimeBetween <= 1.f / (this->Sensor.Frequency))
     {
       return false;
     }
+
     if (this->Parent == nullptr)
     {
       UE_LOG(LogTemp, Warning, TEXT("Parent is null!"));
       return false;
     }
+
+
+    this->CurrentPosition = this->Parent->GetActorLocation();
+    
+    this->GenerateOdomData(TimeStamp);
 
     if (TimeStamp - LastTimeSnapshotStamp >= 1.f / (this->Sensor.SamplingRate))
     {
@@ -203,6 +213,39 @@ bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
   }
 
   return true;
+}
+
+void UOusterGyroBaseComponent::GenerateOdomData(double time)
+{
+  this->Odom.header.seq = this->PacketSeq;
+  this->Odom.header.stamp.sec = time / 1000000;
+  this->Odom.header.stamp.nsec = time * 1000;
+  this->Odom.header.frame_id = "odom";
+  this->Odom.pose_position.x = this->CurrentPosition.X;
+  this->Odom.pose_position.y = this->CurrentPosition.Y;
+  this->Odom.pose_position.z = this->CurrentPosition.Z;
+  FRotator ActorRotation = this->Parent->GetActorRotation();
+  
+  FQuat quat = FQuat(FRotator(0, 0, FMath::DegreesToRadians(ActorRotation.Yaw)));
+  this->Odom.pose_orientation.x = quat.X;
+  this->Odom.pose_orientation.y = quat.Y;
+  this->Odom.pose_orientation.z = quat.Z;
+  this->Odom.pose_orientation.w = quat.W;
+
+  for (int i = 0; i < 36; i++)
+  {
+    this->Odom.pose_covariance[i] = -1;
+    this->Odom.twist_covariance[i] = -1;
+  }
+
+  FVector ActorVelocity = this->Parent->GetVelocity();
+  this->Odom.twist_linear.x = ActorVelocity.X;
+  this->Odom.twist_linear.y = ActorVelocity.Y;
+  this->Odom.twist_linear.z = ActorVelocity.Z;
+  FVector ActorAngularVelocity = this->GetActorRotationSpeed(time);
+  this->Odom.twist_angular.x = ActorAngularVelocity.X;
+  this->Odom.twist_angular.y = ActorAngularVelocity.Y;
+  this->Odom.twist_angular.z = ActorAngularVelocity.Z;
 }
 
 FVector UOusterGyroBaseComponent::GetActorLinearAccel(double time)

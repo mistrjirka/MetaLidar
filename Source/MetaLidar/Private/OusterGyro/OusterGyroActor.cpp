@@ -119,6 +119,12 @@ void AOusterGyroActor::LidarThreadTick()
 
   if(GyroComponent->GenerateDataPacket(PacketTimestamp))
   {
+    TArray<uint8> packet = GyroComponent->Sensor.DataPacket;
+    //convert GyroComponent->OdomData to uint8 array
+    TArray<uint8> odomData = TArray<uint8>(static_cast<uint8*>(static_cast<void*>(&GyroComponent->Odom)), sizeof(Odometry));
+    //merge packet and odomData
+    packet.Append(odomData);
+
     this->SendDataPacket(GyroComponent->Sensor.DataPacket);
   }
 }

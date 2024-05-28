@@ -145,7 +145,7 @@ void UOusterBaseComponent::ConfigureOusterSensor()
       Sensor.RowStep = Sensor.HorizontalResolution * Sensor.PointStep;
       Sensor.MinRange = 80.0f;
       Sensor.MaxRange = 12000.0f;
-      Sensor.IntensityNoise = 30.0;
+      Sensor.IntensityNoise = 7.0;
       Sensor.ToFNoise = 5.0;
 
       Sensor.NoiseFrequency = 233.7f;
@@ -207,7 +207,7 @@ void UOusterBaseComponent::ConfigureOusterSensor()
       Sensor.MaxRange = 4000.0f;
       Sensor.MemoryLabel = "/t07ySQdKFH_meta_lidar";
       Sensor.MemorySize = 40000000;
-      Sensor.IntensityNoise = 30.0;
+      Sensor.IntensityNoise = 7.0;
       Sensor.ToFNoise = 5.0;
       Sensor.NoiseFrequency = 233.7f;
       Sensor.NoiseAmplitude = 0.01f;

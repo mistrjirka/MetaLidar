@@ -62,6 +62,7 @@ public:
   uint32 MAX_PACKET_SIZE;
 
   FOusterGyro Sensor;
+  Odometry Odom;
 
   /**
    * Generate Ouster packet data using raycast results.
@@ -99,6 +100,10 @@ private:
   FVector linear_fit_a_rot;
   FVector linear_fit_b_rot;
 
+  FVector CurrentPosition;
+
+  Odometry OdomData;
+
   float Gravity;
   UWorld *CurrentWorld;
   uint32 PacketSeq;
@@ -130,6 +135,8 @@ private:
   void calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector& vector_fit_a, FVector& vector_fit_b);
 
   void TakeSnapshot(uint32 TimeStamp);
+
+  void GenerateOdomData(double TimeStamp);
 
   bool ReadyToProcess();
 

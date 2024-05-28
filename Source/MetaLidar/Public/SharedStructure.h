@@ -77,3 +77,14 @@ typedef struct RVector3 {
   double y;
   double z;
 } RVector3;
+
+
+typedef struct Odometry {
+  Header header;
+  RVector3 pose_position;
+  RQuaternion pose_orientation;
+  double pose_covariance[36];
+  RVector3 twist_linear;
+  RVector3 twist_angular;
+  double twist_covariance[36];
+} Odometry;
