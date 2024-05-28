@@ -217,10 +217,9 @@ bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 
 void UOusterGyroBaseComponent::GenerateOdomData(double time)
 {
-  this->Odom.header.seq = this->PacketSeq;
-  this->Odom.header.stamp.sec = time / 1000000;
-  this->Odom.header.stamp.nsec = time * 1000;
-  this->Odom.header.frame_id = "odom";
+  this->Odom.seq = this->PacketSeq;
+  this->Odom.stamp.sec = time / 1000000;
+  this->Odom.stamp.nsec = time * 1000;
   this->Odom.pose_position.x = this->CurrentPosition.X;
   this->Odom.pose_position.y = this->CurrentPosition.Y;
   this->Odom.pose_position.z = this->CurrentPosition.Z;

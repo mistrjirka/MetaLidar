@@ -80,7 +80,8 @@ typedef struct RVector3 {
 
 
 typedef struct Odometry {
-  Header header;
+  Time stamp;
+  uint32 seq;
   RVector3 pose_position;
   RQuaternion pose_orientation;
   double pose_covariance[36];
