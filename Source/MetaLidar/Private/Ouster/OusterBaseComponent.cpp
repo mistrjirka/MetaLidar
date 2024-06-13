@@ -450,13 +450,13 @@ void UOusterBaseComponent::GetScanData()
             float virtualTime =
                 baseTime + ((float)Index / (float)(Sensor.VerticalResolution * Sensor.HorizontalResolution)) *
                                (1.f / Sensor.SamplingRate);
-            if (Index % 2048 * 48 == 0)
+            /*if (Index % 2048 * 48 == 0)
             {
               UE_LOG(LogTemp, Warning, TEXT("Virtual Time: %f index: %d result first %f the time for the part"),
                      virtualTime, Index,
                      (float)Index / (float)(Sensor.VerticalResolution * Sensor.HorizontalResolution),
                      (1.f / Sensor.SamplingRate));
-            }
+            }*/
 
             //Rotation = AddRotationNoise(Rotation, Sensor.NoiseFrequency, Sensor.NoiseAmplitude, Azimuth, virtualTime);
 

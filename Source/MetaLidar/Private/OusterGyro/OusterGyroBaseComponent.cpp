@@ -1,4 +1,5 @@
 #include "OusterGyro/OusterGyroBaseComponent.h"
+#include <cmath>
 
 UOusterGyroBaseComponent::UOusterGyroBaseComponent()
 {
@@ -13,6 +14,42 @@ UOusterGyroBaseComponent::UOusterGyroBaseComponent()
 
   FMemory::Memset(&this->OdomData, 0, sizeof(Odometry));
 
+  CircularBuffer<uint32, 3> testBuffer;
+
+  testBuffer.put(1);
+  testBuffer.put(2);
+  testBuffer.put(3);
+  if (testBuffer.size() != 3)
+  {
+    UE_LOG(LogTemp, Warning, TEXT("Buffer size is not 3!"));
+  }
+  std::array<uint32, 3> buffer = testBuffer.get_all();
+  for (int i = 0; i < 3; i++)
+  {
+      UE_LOG(LogTemp, Warning, TEXT("Buffer is not correct! on index %d value should be %d actually %d"), i, i+1, buffer[i]);
+
+    if (buffer[i] != i + 1)
+    {
+      UE_LOG(LogTemp, Warning, TEXT("Buffer is not correct! on index %d value should be %d actually %d"), i, i+1, buffer[i]);
+    }
+  }
+
+  testBuffer.put(4);
+  if (testBuffer.size() != 3)
+  {
+    UE_LOG(LogTemp, Warning, TEXT("Buffer size is not 3!"));
+  }
+  buffer = testBuffer.get_all();
+
+  for (int i = 0; i < 3; i++)
+  {
+    UE_LOG(LogTemp, Warning, TEXT("Buffer is not correct! on index %d value should be %d actually %d"), i, i+1, buffer[i]);
+
+    if (buffer[i] != i + 2)
+    {
+      UE_LOG(LogTemp, Warning, TEXT("Buffer is not correct! on index %d value should be %d actually %d"), i, i+2, buffer[i]);
+    }
+  }
 
 }
 
@@ -80,14 +117,32 @@ void UOusterGyroBaseComponent::calculateLinearFit(CircularBuffer<T, S> circBuffe
     sumY[0] += buffer[i].first.X;
     sumY[1] += buffer[i].first.Y;
     sumY[2] += buffer[i].first.Z;
+    //check(std::isnan(buffer[i].first.Z) == false);
+    
     sumXY[0] += buffer[i].second * buffer[i].first.X;
     sumXY[1] += buffer[i].second * buffer[i].first.Y;
     sumXY[2] += buffer[i].second * buffer[i].first.Z;
+    
     sumX2 += buffer[i].second * buffer[i].second;
   }
-  vector_fit_a[0] = (S * sumXY[0] - sumX * sumY[0]) / (S * sumX2 - sumX * sumX);
-  vector_fit_a[1] = (S * sumXY[1] - sumX * sumY[1]) / (S * sumX2 - sumX * sumX);
-  vector_fit_a[2] = (S * sumXY[2] - sumX * sumY[2]) / (S * sumX2 - sumX * sumX);
+
+  double denominator = S * sumX2 - sumX * sumX; 
+  ////check(std::isnan(denominator) == false);
+  ////check(std::isnan(sumXY[2]) == false);
+  ////check(std::isnan(sumX) == false);
+  ////check(std::isnan(sumY[2]) == false);
+  if (denominator == 0.0 )
+  {
+    // Handle singular matrix case
+    vector_fit_a[0] = vector_fit_a[1] = vector_fit_a[2] = 0.0;
+    vector_fit_b[0] = vector_fit_b[1] = vector_fit_b[2] = 0.0;
+    return;
+  }
+
+  vector_fit_a[0] = (S * sumXY[0] - sumX * sumY[0]) / denominator;
+  vector_fit_a[1] = (S * sumXY[1] - sumX * sumY[1]) / denominator;
+  vector_fit_a[2] = (S * sumXY[2] - sumX * sumY[2]) / denominator;
+  ////check(std::isnan(vector_fit_a[2]) == false);
 
   vector_fit_b[0] = (sumY[0] - vector_fit_a[0] * sumX) / S;
   vector_fit_b[1] = (sumY[1] - vector_fit_a[1] * sumX) / S;
@@ -114,6 +169,7 @@ void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
   // ActorRotationRadians.Z);
   this->RotationBuffer.put(std::pair<FVector, uint32>(ActorRotationRadians, TimeStamp_sec));
   this->calculateLinearFit(this->RotationBuffer, ROTATION_BUFFER_SIZE, this->linear_fit_a_rot, this->linear_fit_b_rot);
+  //check(std::isnan(this->linear_fit_a_rot[2]) == false);
 }
 
 bool UOusterGyroBaseComponent::ReadyToProcess()
@@ -128,6 +184,8 @@ FVector UOusterGyroBaseComponent::getExtrapolatedVelocity(double time)
   result.X = this->linear_fit_a_vel[0] * time + this->linear_fit_b_vel[0];
   result.Y = this->linear_fit_a_vel[1] * time + this->linear_fit_b_vel[1];
   result.Z = this->linear_fit_a_vel[2] * time + this->linear_fit_b_vel[2];
+
+  
   return result;
 }
 
@@ -137,6 +195,13 @@ FVector UOusterGyroBaseComponent::getExtrapolatedRotation(double time)
   result.X = this->linear_fit_a_rot[0] * time + this->linear_fit_b_rot[0];
   result.Y = this->linear_fit_a_rot[1] * time + this->linear_fit_b_rot[1];
   result.Z = this->linear_fit_a_rot[2] * time + this->linear_fit_b_rot[2];
+  ////check(std::isnan(this->linear_fit_a_rot[2]) == false);
+
+  if(PacketSeq % 100 == 0)
+  {
+    UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters: %f, %f, %f, %f"), this->linear_fit_a_rot[0], this->linear_fit_a_rot[1], this->linear_fit_a_rot[2], time);
+    UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters offset: %f, %f, %f, %f"), this->linear_fit_b_rot[0], this->linear_fit_b_rot[1], this->linear_fit_b_rot[2],time);
+  }
   return result;
 }
 
@@ -187,17 +252,19 @@ bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
     FVector ActorRotation = GetActorRotationSpeed(TimeStamp);
     this->Sensor.DataPacket.SetNum(sizeof(OusterGyroData));
     OusterGyroData* Data = reinterpret_cast<OusterGyroData*>(this->Sensor.DataPacket.GetData());
+    FRotator angles = this->Parent->GetActorRotation();
+    FQuat quat = FQuat(angles);
 
     Data->seq = this->PacketSeq++;
     Data->time.sec = timestamp_sec;
     Data->time.nsec = timestamp_nsec;
-    Data->orientation.x = 0;
-    Data->orientation.y = 0;
-    Data->orientation.z = 0;
-    Data->orientation.w = 0;
-    Data->angular_velocity.x = ActorRotation.Z;
-    Data->angular_velocity.y = ActorRotation.X;
-    Data->angular_velocity.z = ActorRotation.Y;
+    Data->orientation.x = quat.X;
+    Data->orientation.y = quat.Y;
+    Data->orientation.z = quat.Z;
+    Data->orientation.w = quat.W;
+    Data->angular_velocity.x = ActorRotation.X;
+    Data->angular_velocity.y = ActorRotation.Y;
+    Data->angular_velocity.z = ActorRotation.Z;
     Data->linear_acceleration.x = ActorLocation.X;
     Data->linear_acceleration.y = ActorLocation.Y;
     Data->linear_acceleration.z = ActorLocation.Z;
@@ -224,8 +291,19 @@ void UOusterGyroBaseComponent::GenerateOdomData(double time)
   this->Odom.pose_position.y = this->CurrentPosition.Y;
   this->Odom.pose_position.z = this->CurrentPosition.Z;
   FRotator ActorRotation = this->Parent->GetActorRotation();
-  
-  FQuat quat = FQuat(FRotator(0, 0, FMath::DegreesToRadians(ActorRotation.Yaw)));
+  FVector ActorVelocity = this->Parent->GetVelocity();
+  FVector ActorAngularVelocity = this->GetActorRotationSpeed(time);
+
+  FQuat quat = FQuat(ActorRotation);
+
+  if(this->PacketSeq % 100 == 0)
+  {
+    //UE_LOG(LogTemp, Warning, TEXT("Quaternion: %f, %f, %f, %f"), quat.X, quat.Y, quat.Z, quat.W);
+    //UE_LOG(LogTemp, Warning, TEXT("Yaw: %f"), ActorRotation.Yaw);
+    //UE_LOG(LogTemp, Warning, TEXT("Velocity: %f, %f, %f"), ActorRotation.Pitch, ActorRotation.Roll, ActorRotation.Yaw);
+    //UE_LOG(LogTemp, Warning, TEXT("Angular Velocity: %f, %f, %f"), ActorAngularVelocity.X, ActorAngularVelocity.Y, ActorAngularVelocity.Z);
+  }
+
   this->Odom.pose_orientation.x = quat.X;
   this->Odom.pose_orientation.y = quat.Y;
   this->Odom.pose_orientation.z = quat.Z;
@@ -237,11 +315,9 @@ void UOusterGyroBaseComponent::GenerateOdomData(double time)
     this->Odom.twist_covariance[i] = -1;
   }
 
-  FVector ActorVelocity = this->Parent->GetVelocity();
   this->Odom.twist_linear.x = ActorVelocity.X;
   this->Odom.twist_linear.y = ActorVelocity.Y;
   this->Odom.twist_linear.z = ActorVelocity.Z;
-  FVector ActorAngularVelocity = this->GetActorRotationSpeed(time);
   this->Odom.twist_angular.x = ActorAngularVelocity.X;
   this->Odom.twist_angular.y = ActorAngularVelocity.Y;
   this->Odom.twist_angular.z = ActorAngularVelocity.Z;
@@ -251,7 +327,9 @@ FVector UOusterGyroBaseComponent::GetActorLinearAccel(double time)
 {
   time = time / (double)10e6;
   FVector velBefore = this->getExtrapolatedVelocity(time - (1.f / this->Sensor.Frequency));
+
   FVector velNow = this->getExtrapolatedVelocity(time);
+
   FVector accel = (velNow - velBefore) / (1.f / this->Sensor.Frequency);
   accel.Z -= this->Gravity / 100;
 
@@ -265,7 +343,14 @@ FVector UOusterGyroBaseComponent::GetActorRotationSpeed(double time)
 {
   time = time / (double)10e6;
   FVector AngularPosPrev = this->getExtrapolatedRotation(time - (1.f / this->Sensor.Frequency));
+  
   FVector AngularPosNow = this->getExtrapolatedRotation(time);
+  
+  if(PacketSeq % 100 == 0)
+  {
+    UE_LOG(LogTemp, Warning, TEXT("AngularPosPrev: %f, %f, %f"), AngularPosPrev.X, AngularPosPrev.Y, AngularPosPrev.Z);
+    UE_LOG(LogTemp, Warning, TEXT("AngularPosNow: %f, %f, %f"), AngularPosNow.X, AngularPosNow.Y, AngularPosNow.Z);
+  }
   FVector vel = (AngularPosNow - AngularPosPrev) / (1.f / this->Sensor.Frequency);
 
   // AngularVelocity = AngularVelocity - this->CurrentRotation;

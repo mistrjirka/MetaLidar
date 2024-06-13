@@ -8,8 +8,6 @@ public class MetaLidar : ModuleRules
 	{
 		//UEBuildConfiguration.bForceEnableExceptions = true;
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
-		AddEngineThirdPartyPrivateStaticDependencies(Target, "zlib");
-		// Path to the root directory of PCL
 		//PublicDependencyModuleNames.Add("PCL");
 
 		PublicIncludePaths.AddRange(

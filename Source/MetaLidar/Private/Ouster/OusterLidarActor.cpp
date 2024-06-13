@@ -1,30 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Ouster/OusterLidarActor.h"
-THIRD_PARTY_INCLUDES_START
-#include "zlib.h"
-THIRD_PARTY_INCLUDES_END
 
-TArray<uint8> CompressData(const TArray<uint8>& InData)
-{
-  if (InData.Num() == 0)
-  {
-    return TArray<uint8>();
-  }
-
-  uLongf OutBufferSize = compressBound(InData.Num());
-  TArray<uint8> OutData;
-  OutData.AddUninitialized(OutBufferSize);
-
-  if (compress2(OutData.GetData(), &OutBufferSize, InData.GetData(), InData.Num(), Z_BEST_COMPRESSION) != Z_OK)
-  {
-    // Handle error
-  }
-
-  OutData.SetNum(OutBufferSize);
-  return OutData;
-}
-// Sets default values
 AOusterLidarActor::AOusterLidarActor()
 {
   // Set this actor to call Tick() every frame.  You can turn this off to

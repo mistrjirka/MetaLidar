@@ -7,16 +7,15 @@ template<typename T, size_t S>
 class CircularBuffer {
 public:
     void put(T item) {
-        buffer_[tail_++] = item;
-        am = std::min(am++, S);
-        if (tail_ >= S) {
-            tail_ = 0;
-        }
+        int prev_tail = tail_;
+        tail_ = (tail_ + 1) % S;
+
         if (tail_ == head_) {
-            if (++head_ >= S) {
-                head_ = 0;
-            }
+            head_ = (head_ + 1) % S;
         }
+
+        buffer_[prev_tail] = item;
+
     }
 
     std::array<T, S> get_all() {
@@ -29,7 +28,7 @@ public:
             items[i++] = buffer_[index++];
             //UE_LOG(LogTemp, Warning, TEXT("Index: %d currend output Index %d"), index, i);
             index = index % S;
-        } while (index != tail_);
+        } while (index != tail_ && i < S);
         return items;
     }
 
@@ -49,5 +48,4 @@ private:
     std::array<T, S> buffer_;
     size_t head_ = 0;
     size_t tail_ = 0;
-    size_t am = 0;
 };
