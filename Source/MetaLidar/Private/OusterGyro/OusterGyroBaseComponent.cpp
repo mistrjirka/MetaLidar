@@ -1,6 +1,8 @@
 #include "OusterGyro/OusterGyroBaseComponent.h"
 #include <cmath>
 
+#define LENGTH_DIVIDER 100
+
 UOusterGyroBaseComponent::UOusterGyroBaseComponent()
 {
   PrimaryComponentTick.bCanEverTick = true;
@@ -26,11 +28,9 @@ UOusterGyroBaseComponent::UOusterGyroBaseComponent()
   std::array<uint32, 3> buffer = testBuffer.get_all();
   for (int i = 0; i < 3; i++)
   {
-      UE_LOG(LogTemp, Warning, TEXT("Buffer is not correct! on index %d value should be %d actually %d"), i, i+1, buffer[i]);
-
-    if (buffer[i] != i + 1)
+    if(buffer[i] != i+1)
     {
-      UE_LOG(LogTemp, Warning, TEXT("Buffer is not correct! on index %d value should be %d actually %d"), i, i+1, buffer[i]);
+        UE_LOG(LogTemp, Warning, TEXT("Buffer is not correct! on index %d value should be %d actually %d"), i, i+1, buffer[i]);
     }
   }
 
@@ -39,12 +39,10 @@ UOusterGyroBaseComponent::UOusterGyroBaseComponent()
   {
     UE_LOG(LogTemp, Warning, TEXT("Buffer size is not 3!"));
   }
-  buffer = testBuffer.get_all();
+  buffer = testBuffer.get_all(true);
 
   for (int i = 0; i < 3; i++)
   {
-    UE_LOG(LogTemp, Warning, TEXT("Buffer is not correct! on index %d value should be %d actually %d"), i, i+1, buffer[i]);
-
     if (buffer[i] != i + 2)
     {
       UE_LOG(LogTemp, Warning, TEXT("Buffer is not correct! on index %d value should be %d actually %d"), i, i+2, buffer[i]);
@@ -97,7 +95,7 @@ void UOusterGyroBaseComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 template <typename T, size_t S>
 void UOusterGyroBaseComponent::calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector& vector_fit_a,
-                                                  FVector& vector_fit_b)
+                                                  FVector& vector_fit_b, bool print)
 {
   if (circBuffer.size() < S)
   {
@@ -117,6 +115,10 @@ void UOusterGyroBaseComponent::calculateLinearFit(CircularBuffer<T, S> circBuffe
     sumY[0] += buffer[i].first.X;
     sumY[1] += buffer[i].first.Y;
     sumY[2] += buffer[i].first.Z;
+    if(print)
+    {
+      UE_LOG(LogTemp, Warning, TEXT("Linear fit %d: %f, %f, %f"),i, buffer[i].first.X, buffer[i].first.Y, buffer[i].first.Z);
+    }
     //check(std::isnan(buffer[i].first.Z) == false);
     
     sumXY[0] += buffer[i].second * buffer[i].first.X;
@@ -147,6 +149,10 @@ void UOusterGyroBaseComponent::calculateLinearFit(CircularBuffer<T, S> circBuffe
   vector_fit_b[0] = (sumY[0] - vector_fit_a[0] * sumX) / S;
   vector_fit_b[1] = (sumY[1] - vector_fit_a[1] * sumX) / S;
   vector_fit_b[2] = (sumY[2] - vector_fit_a[2] * sumX) / S;
+  if(print)
+  {
+    UE_LOG(LogTemp, Warning, TEXT("Linear fit: %f, %f, %f, %f, %f, %f"), vector_fit_a[0], vector_fit_a[1], vector_fit_a[2], vector_fit_b[0], vector_fit_b[1], vector_fit_b[2]);
+  }
 }
 
 void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
@@ -154,21 +160,21 @@ void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
   uint32 TimeStamp_sec = TimeStamp / 10e6;
   FVector ActorVelocity = this->Parent->GetVelocity();
 
+  FRotator ActorRotation = this->Parent->GetActorRotation();
+  ActorVelocity = ActorRotation.UnrotateVector(ActorVelocity);
   this->AccelerationBuffer.put(std::pair<FVector, uint32>(ActorVelocity, TimeStamp_sec));
 
   this->calculateLinearFit(this->AccelerationBuffer, ACCELERATION_BUFFER_SIZE, this->linear_fit_a_vel,
-                           this->linear_fit_b_vel);
+                           this->linear_fit_b_vel, true);
 
-  FRotator ActorRotation = this->Parent->GetActorRotation();
   FVector ActorRotationRadians;
-  ActorRotationRadians.X = FMath::DegreesToRadians(ActorRotation.Pitch);
-  ActorRotationRadians.Y = FMath::DegreesToRadians(ActorRotation.Yaw);
-  ActorRotationRadians.Z = FMath::DegreesToRadians(ActorRotation.Roll);
+  ActorRotationRadians.X = FMath::DegreesToRadians(ActorRotation.Roll);
+  ActorRotationRadians.Y = FMath::DegreesToRadians(ActorRotation.Pitch);
+  ActorRotationRadians.Z = FMath::DegreesToRadians(ActorRotation.Yaw);
 
-  // UE_LOG(LogTemp, Warning, TEXT("Rotation: %f, %f, %f"), ActorRotationRadians.X, ActorRotationRadians.Y,
-  // ActorRotationRadians.Z);
+  //UE_LOG(LogTemp, Warning, TEXT("Rotation: %f, %f, %f"), ActorRotationRadians.X, ActorRotationRadians.Y, ActorRotationRadians.Z);
   this->RotationBuffer.put(std::pair<FVector, uint32>(ActorRotationRadians, TimeStamp_sec));
-  this->calculateLinearFit(this->RotationBuffer, ROTATION_BUFFER_SIZE, this->linear_fit_a_rot, this->linear_fit_b_rot);
+  this->calculateLinearFit(this->RotationBuffer, ROTATION_BUFFER_SIZE, this->linear_fit_a_rot, this->linear_fit_b_rot, true);
   //check(std::isnan(this->linear_fit_a_rot[2]) == false);
 }
 
@@ -184,7 +190,12 @@ FVector UOusterGyroBaseComponent::getExtrapolatedVelocity(double time)
   result.X = this->linear_fit_a_vel[0] * time + this->linear_fit_b_vel[0];
   result.Y = this->linear_fit_a_vel[1] * time + this->linear_fit_b_vel[1];
   result.Z = this->linear_fit_a_vel[2] * time + this->linear_fit_b_vel[2];
-
+ 
+  /*if(PacketSeq % 100 == 0)
+  {
+    UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters: %f, %f, %f, %f"), this->linear_fit_a_vel[0], this->linear_fit_a_vel[1], this->linear_fit_a_vel[2], time);
+    UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters offset: %f, %f, %f, %f"), this->linear_fit_b_vel[0], this->linear_fit_b_vel[1], this->linear_fit_b_vel[2],time);
+  }*/
   
   return result;
 }
@@ -197,16 +208,17 @@ FVector UOusterGyroBaseComponent::getExtrapolatedRotation(double time)
   result.Z = this->linear_fit_a_rot[2] * time + this->linear_fit_b_rot[2];
   ////check(std::isnan(this->linear_fit_a_rot[2]) == false);
 
-  if(PacketSeq % 100 == 0)
+  /*if(PacketSeq % 100 == 0)
   {
     UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters: %f, %f, %f, %f"), this->linear_fit_a_rot[0], this->linear_fit_a_rot[1], this->linear_fit_a_rot[2], time);
     UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters offset: %f, %f, %f, %f"), this->linear_fit_b_rot[0], this->linear_fit_b_rot[1], this->linear_fit_b_rot[2],time);
-  }
+  }*/
   return result;
 }
 
 bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 {
+  double time = static_cast<double>(TimeStamp);
   {
     TRACE_CPUPROFILER_EVENT_SCOPE_STR("Gyro generation")
     float TimeBetween = (TimeStamp - LastTimeStamp) / 1000000.0;
@@ -248,8 +260,8 @@ bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
     uint32_t timestamp_nsec = TimeStamp * 1000;
 
     // Get the current location of the actor
-    FVector ActorLocation = GetActorLinearAccel(TimeStamp);
-    FVector ActorRotation = GetActorRotationSpeed(TimeStamp);
+    FVector ActorLocation = GetActorLinearAccel(time);
+    FVector ActorRotation = GetActorRotationSpeed(time);
     this->Sensor.DataPacket.SetNum(sizeof(OusterGyroData));
     OusterGyroData* Data = reinterpret_cast<OusterGyroData*>(this->Sensor.DataPacket.GetData());
     FRotator angles = this->Parent->GetActorRotation();
@@ -282,26 +294,28 @@ bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
   return true;
 }
 
-void UOusterGyroBaseComponent::GenerateOdomData(double time)
+void UOusterGyroBaseComponent::GenerateOdomData(uint32 TimeStamp)
 {
+  double time = static_cast<double>(TimeStamp);
   this->Odom.seq = this->PacketSeq;
   this->Odom.stamp.sec = time / 1000000;
   this->Odom.stamp.nsec = time * 1000;
-  this->Odom.pose_position.x = this->CurrentPosition.X;
-  this->Odom.pose_position.y = this->CurrentPosition.Y;
-  this->Odom.pose_position.z = this->CurrentPosition.Z;
+  this->Odom.pose_position.x = this->CurrentPosition.X/LENGTH_DIVIDER;
+  this->Odom.pose_position.y = this->CurrentPosition.Y/LENGTH_DIVIDER;
+  this->Odom.pose_position.z = this->CurrentPosition.Z/LENGTH_DIVIDER;
   FRotator ActorRotation = this->Parent->GetActorRotation();
-  FVector ActorVelocity = this->Parent->GetVelocity();
+  FVector ActorVelocity = this->Parent->GetVelocity()/LENGTH_DIVIDER;
+  ActorVelocity = ActorRotation.UnrotateVector(ActorVelocity);
   FVector ActorAngularVelocity = this->GetActorRotationSpeed(time);
 
   FQuat quat = FQuat(ActorRotation);
 
   if(this->PacketSeq % 100 == 0)
   {
-    //UE_LOG(LogTemp, Warning, TEXT("Quaternion: %f, %f, %f, %f"), quat.X, quat.Y, quat.Z, quat.W);
-    //UE_LOG(LogTemp, Warning, TEXT("Yaw: %f"), ActorRotation.Yaw);
-    //UE_LOG(LogTemp, Warning, TEXT("Velocity: %f, %f, %f"), ActorRotation.Pitch, ActorRotation.Roll, ActorRotation.Yaw);
-    //UE_LOG(LogTemp, Warning, TEXT("Angular Velocity: %f, %f, %f"), ActorAngularVelocity.X, ActorAngularVelocity.Y, ActorAngularVelocity.Z);
+    UE_LOG(LogTemp, Warning, TEXT("Quaternion: %f, %f, %f, %f"), quat.X, quat.Y, quat.Z, quat.W);
+    UE_LOG(LogTemp, Warning, TEXT("Yaw: %f"), ActorRotation.Yaw);
+    UE_LOG(LogTemp, Warning, TEXT("Velocity: %f, %f, %f"), ActorRotation.Pitch, ActorRotation.Roll, ActorRotation.Yaw);
+    UE_LOG(LogTemp, Warning, TEXT("Angular Velocity: %f, %f, %f"), ActorAngularVelocity.X, ActorAngularVelocity.Y, ActorAngularVelocity.Z);
   }
 
   this->Odom.pose_orientation.x = quat.X;
@@ -330,8 +344,11 @@ FVector UOusterGyroBaseComponent::GetActorLinearAccel(double time)
 
   FVector velNow = this->getExtrapolatedVelocity(time);
 
+  velBefore = velBefore / LENGTH_DIVIDER;
+  velNow = velNow / LENGTH_DIVIDER;
+
   FVector accel = (velNow - velBefore) / (1.f / this->Sensor.Frequency);
-  accel.Z -= this->Gravity / 100;
+  accel.Z -= this->Gravity / LENGTH_DIVIDER;
 
   this->CurrentRotation = this->Parent->GetActorRotation();
   accel = CurrentRotation.RotateVector(accel);
@@ -346,11 +363,12 @@ FVector UOusterGyroBaseComponent::GetActorRotationSpeed(double time)
   
   FVector AngularPosNow = this->getExtrapolatedRotation(time);
   
-  if(PacketSeq % 100 == 0)
+  
+  /*if(PacketSeq % 100 == 0)
   {
     UE_LOG(LogTemp, Warning, TEXT("AngularPosPrev: %f, %f, %f"), AngularPosPrev.X, AngularPosPrev.Y, AngularPosPrev.Z);
     UE_LOG(LogTemp, Warning, TEXT("AngularPosNow: %f, %f, %f"), AngularPosNow.X, AngularPosNow.Y, AngularPosNow.Z);
-  }
+  }*/
   FVector vel = (AngularPosNow - AngularPosPrev) / (1.f / this->Sensor.Frequency);
 
   // AngularVelocity = AngularVelocity - this->CurrentRotation;

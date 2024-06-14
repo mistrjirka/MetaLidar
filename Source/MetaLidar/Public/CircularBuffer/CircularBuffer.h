@@ -14,21 +14,26 @@ public:
             head_ = (head_ + 1) % S;
         }
 
-        buffer_[prev_tail] = item;
+        buffer_[tail_] = item;
 
     }
 
-    std::array<T, S> get_all() {
+    std::array<T, S> get_all(bool print = false) {
         //UE_LOG(LogTemp, Warning, TEXT("Getting all"));
         std::array<T, S> items;
         size_t index = head_;
-        //UE_LOG(LogTemp, Warning, TEXT("Head: %d"), head_);
+        if(print){
+            UE_LOG(LogTemp, Warning, TEXT("Tail: %d"), tail_);
+            UE_LOG(LogTemp, Warning, TEXT("Head: %d"), head_);
+        }
         size_t i = 0;
         do {
+            if(print)
+                UE_LOG(LogTemp, Warning, TEXT("Index: %d currend output Index %d"), index, i);
             items[i++] = buffer_[index++];
-            //UE_LOG(LogTemp, Warning, TEXT("Index: %d currend output Index %d"), index, i);
+
             index = index % S;
-        } while (index != tail_ && i < S);
+        } while (i < S);
         return items;
     }
 

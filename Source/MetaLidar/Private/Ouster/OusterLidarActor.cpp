@@ -20,8 +20,8 @@ void AOusterLidarActor::BeginPlay()
   FTimespan ThreadSleepTime = FTimespan::FromSeconds((float)(1.f /
    (float)LidarComponent->Sensor.SamplingRate));
   //FTimespan ThreadSleepTime = FTimespan::FromSeconds(2.0f);
-  UE_LOG(LogTemp, Warning, TEXT("ThreadSleepTime: %f"), ThreadSleepTime.GetTotalSeconds());
-  UE_LOG(LogTemp, Warning, TEXT("SamplingRate inside begin: %d"), LidarComponent->Sensor.SamplingRate);
+  //UE_LOG(LogTemp, Warning, TEXT("ThreadSleepTime: %f"), ThreadSleepTime.GetTotalSeconds());
+  //UE_LOG(LogTemp, Warning, TEXT("SamplingRate inside begin: %d"), LidarComponent->Sensor.SamplingRate);
   FString UniqueThreadName = "LidarThreadOuster";
 
   LidarThread = new LidarThreadProcess(ThreadSleepTime, *UniqueThreadName, this);
@@ -42,13 +42,13 @@ void AOusterLidarActor::BeginPlay()
   {
     LidarThread->Init();
     LidarThread->LidarThreadInit();
-    UE_LOG(LogTemp, Warning, TEXT("Lidar thread initialized!"));
+    //UE_LOG(LogTemp, Warning, TEXT("Lidar thread initialized!"));
   }
 }
 
 void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason)
 {
-  UE_LOG(LogTemp, Warning, TEXT("EndPlay called!"));
+  //UE_LOG(LogTemp, Warning, TEXT("EndPlay called!"));
   if (LidarThread)
   {
     LidarThread->LidarThreadShutdown();
@@ -57,7 +57,7 @@ void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason)
     pthread_mutex_unlock(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
     pthread_mutex_destroy(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
 
-    UE_LOG(LogTemp, Warning, TEXT("Lidar thread stopped!"));
+    //UE_LOG(LogTemp, Warning, TEXT("Lidar thread stopped!"));
   }
 
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -72,7 +72,7 @@ void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason)
 
   while (!LidarThread->ThreadHasStopped() && LoopCount < 50)
   {
-    UE_LOG(LogTemp, Warning, TEXT("Waiting for LidarThread to end..."));
+    //UE_LOG(LogTemp, Warning, TEXT("Waiting for LidarThread to end..."));
     FPlatformProcess::Sleep(0.1);
     LoopCount++;
   }
@@ -81,9 +81,9 @@ void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason)
   {
     if (LidarThread->Thread)
       LidarThread->Thread->Kill();
-    UE_LOG(LogTemp, Warning, TEXT("LidarThread failed to end in time!"));
+    //UE_LOG(LogTemp, Warning, TEXT("LidarThread failed to end in time!"));
 
-    UE_LOG(LogTemp, Warning, TEXT("LidarThread failed to end in time!"));
+    //UE_LOG(LogTemp, Warning, TEXT("LidarThread failed to end in time!"));
   }
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 

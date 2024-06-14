@@ -132,11 +132,11 @@ private:
   uint32 GetTimestampMicroseconds();
 
   template<typename T, size_t S>
-  void calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector& vector_fit_a, FVector& vector_fit_b);
+  void calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector& vector_fit_a, FVector& vector_fit_b, bool print = false);
 
   void TakeSnapshot(uint32 TimeStamp);
 
-  void GenerateOdomData(double TimeStamp);
+  void GenerateOdomData(uint32 TimeStamp);
 
   bool ReadyToProcess();
 
