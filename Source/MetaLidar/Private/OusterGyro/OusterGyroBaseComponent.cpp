@@ -15,40 +15,6 @@ UOusterGyroBaseComponent::UOusterGyroBaseComponent()
   this->CurrentPosition = FVector(0, 0, 0);
 
   FMemory::Memset(&this->OdomData, 0, sizeof(Odometry));
-
-  CircularBuffer<uint32, 3> testBuffer;
-
-  testBuffer.put(1);
-  testBuffer.put(2);
-  testBuffer.put(3);
-  if (testBuffer.size() != 3)
-  {
-    UE_LOG(LogTemp, Warning, TEXT("Buffer size is not 3!"));
-  }
-  std::array<uint32, 3> buffer = testBuffer.get_all();
-  for (int i = 0; i < 3; i++)
-  {
-    if(buffer[i] != i+1)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Buffer is not correct! on index %d value should be %d actually %d"), i, i+1, buffer[i]);
-    }
-  }
-
-  testBuffer.put(4);
-  if (testBuffer.size() != 3)
-  {
-    UE_LOG(LogTemp, Warning, TEXT("Buffer size is not 3!"));
-  }
-  buffer = testBuffer.get_all();
-
-  for (int i = 0; i < 3; i++)
-  {
-    if (buffer[i] != i + 2)
-    {
-      UE_LOG(LogTemp, Warning, TEXT("Buffer is not correct! on index %d value should be %d actually %d"), i, i+2, buffer[i]);
-    }
-  }
-
 }
 
 void UOusterGyroBaseComponent::BeginPlay()
@@ -93,68 +59,6 @@ void UOusterGyroBaseComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
   Super::EndPlay(EndPlayReason);
 }
 
-template <typename T, size_t S>
-void UOusterGyroBaseComponent::calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector& vector_fit_a,
-                                                  FVector& vector_fit_b, bool print)
-{
-  if (circBuffer.size() < S)
-  {
-    return;
-  }
-  std::array<std::pair<FVector, uint32>, S> buffer = circBuffer.get_all();
-  double sumX = 0.0, sumY[3], sumXY[3], sumX2 = 0.0;
-  for (int i = 0; i < 3; i++)
-  {
-    sumY[i] = 0.0;
-    sumXY[i] = 0.0;
-  }
-
-  for (int i = 0; i < S; i++)
-  {
-    sumX += buffer[i].second;
-    sumY[0] += buffer[i].first.X;
-    sumY[1] += buffer[i].first.Y;
-    sumY[2] += buffer[i].first.Z;
-    /*if(print)
-    {
-      UE_LOG(LogTemp, Warning, TEXT("Linear fit %d: %f, %f, %f"),i, buffer[i].first.X, buffer[i].first.Y, buffer[i].first.Z);
-    }*/
-    //check(std::isnan(buffer[i].first.Z) == false);
-    
-    sumXY[0] += buffer[i].second * buffer[i].first.X;
-    sumXY[1] += buffer[i].second * buffer[i].first.Y;
-    sumXY[2] += buffer[i].second * buffer[i].first.Z;
-    
-    sumX2 += buffer[i].second * buffer[i].second;
-  }
-
-  double denominator = S * sumX2 - sumX * sumX; 
-  ////check(std::isnan(denominator) == false);
-  ////check(std::isnan(sumXY[2]) == false);
-  ////check(std::isnan(sumX) == false);
-  ////check(std::isnan(sumY[2]) == false);
-  if (denominator == 0.0 )
-  {
-    // Handle singular matrix case
-    vector_fit_a[0] = vector_fit_a[1] = vector_fit_a[2] = 0.0;
-    vector_fit_b[0] = vector_fit_b[1] = vector_fit_b[2] = 0.0;
-    return;
-  }
-
-  vector_fit_a[0] = (S * sumXY[0] - sumX * sumY[0]) / denominator;
-  vector_fit_a[1] = (S * sumXY[1] - sumX * sumY[1]) / denominator;
-  vector_fit_a[2] = (S * sumXY[2] - sumX * sumY[2]) / denominator;
-  ////check(std::isnan(vector_fit_a[2]) == false);
-
-  vector_fit_b[0] = (sumY[0] - vector_fit_a[0] * sumX) / S;
-  vector_fit_b[1] = (sumY[1] - vector_fit_a[1] * sumX) / S;
-  vector_fit_b[2] = (sumY[2] - vector_fit_a[2] * sumX) / S;
-  if(print)
-  {
-    UE_LOG(LogTemp, Warning, TEXT("Linear fit: %f, %f, %f, %f, %f, %f"), vector_fit_a[0], vector_fit_a[1], vector_fit_a[2], vector_fit_b[0], vector_fit_b[1], vector_fit_b[2]);
-  }
-}
-
 void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
 {
   uint32 TimeStamp_sec = TimeStamp / 10e6;
@@ -164,7 +68,7 @@ void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
   ActorVelocity = ActorRotation.UnrotateVector(ActorVelocity);
   this->AccelerationBuffer.put(std::pair<FVector, uint32>(ActorVelocity, TimeStamp_sec));
 
-  this->calculateLinearFit(this->AccelerationBuffer, ACCELERATION_BUFFER_SIZE, this->linear_fit_a_vel,
+  MathToolkit::calculateLinearFit(this->AccelerationBuffer, ACCELERATION_BUFFER_SIZE, this->linear_fit_a_vel,
                            this->linear_fit_b_vel, false);
 
   FVector ActorRotationRadians;
@@ -174,7 +78,7 @@ void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
 
   //UE_LOG(LogTemp, Warning, TEXT("Rotation: %f, %f, %f"), ActorRotationRadians.X, ActorRotationRadians.Y, ActorRotationRadians.Z);
   this->RotationBuffer.put(std::pair<FVector, uint32>(ActorRotationRadians, TimeStamp_sec));
-  this->calculateLinearFit(this->RotationBuffer, ROTATION_BUFFER_SIZE, this->linear_fit_a_rot, this->linear_fit_b_rot, false);
+  MathToolkit::calculateLinearFit(this->RotationBuffer, ROTATION_BUFFER_SIZE, this->linear_fit_a_rot, this->linear_fit_b_rot, false);
   //check(std::isnan(this->linear_fit_a_rot[2]) == false);
 }
 

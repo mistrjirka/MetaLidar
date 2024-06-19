@@ -1,0 +1,15 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#ifndef UNIT_TEST_FRIEND
+#define UNIT_TEST_FRIEND
+#endif
+
+class LinearFitTest 
+{
+    public:
+        LinearFitTest();
+    private:
+        UNIT_TEST_FRIEND;
+
+}; 

@@ -9,6 +9,7 @@
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "SharedStructure.h"
 #include "CircularBuffer/CircularBuffer.h"
+#include "MathToolkit/MathToolkit.h"
 #include <array>
 #include <random>
 #include <sys/types.h>
@@ -130,9 +131,6 @@ private:
    * Get current time of game.
    */
   uint32 GetTimestampMicroseconds();
-
-  template<typename T, size_t S>
-  void calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector& vector_fit_a, FVector& vector_fit_b, bool print = false);
 
   void TakeSnapshot(uint32 TimeStamp);
 
