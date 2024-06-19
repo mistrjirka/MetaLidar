@@ -22,10 +22,10 @@ void MathToolkit::calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t siz
     sumY[0] += buffer[i].first.X;
     sumY[1] += buffer[i].first.Y;
     sumY[2] += buffer[i].first.Z;
-    /*if(print)
+    if(print)
     {
-      UE_LOG(LogTemp, Warning, TEXT("Linear fit %d: %f, %f, %f"),i, buffer[i].first.X, buffer[i].first.Y, buffer[i].first.Z);
-    }*/
+      UE_LOG(LogTemp, Warning, TEXT("Point %d: %f, %f, %f"),i, buffer[i].first.X, buffer[i].first.Y, buffer[i].first.Z);
+    }
     //check(std::isnan(buffer[i].first.Z) == false);
     
     sumXY[0] += buffer[i].second * buffer[i].first.X;
@@ -48,6 +48,7 @@ void MathToolkit::calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t siz
     return;
   }
 
+
   vector_fit_a[0] = (S * sumXY[0] - sumX * sumY[0]) / denominator;
   vector_fit_a[1] = (S * sumXY[1] - sumX * sumY[1]) / denominator;
   vector_fit_a[2] = (S * sumXY[2] - sumX * sumY[2]) / denominator;
@@ -58,6 +59,6 @@ void MathToolkit::calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t siz
   vector_fit_b[2] = (sumY[2] - vector_fit_a[2] * sumX) / S;
   if(print)
   {
-    UE_LOG(LogTemp, Warning, TEXT("Linear fit: %f, %f, %f, %f, %f, %f"), vector_fit_a[0], vector_fit_a[1], vector_fit_a[2], vector_fit_b[0], vector_fit_b[1], vector_fit_b[2]);
+    UE_LOG(LogTemp, Warning, TEXT("Resulting Linear fit: %f, %f, %f, %f, %f, %f"), vector_fit_a[0], vector_fit_a[1], vector_fit_a[2], vector_fit_b[0], vector_fit_b[1], vector_fit_b[2]);
   }
 }
