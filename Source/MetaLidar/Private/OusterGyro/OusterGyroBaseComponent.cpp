@@ -214,13 +214,13 @@ void UOusterGyroBaseComponent::GenerateOdomData(uint32 TimeStamp)
 
   FQuat quat = FQuat(ActorRotation);
 
-  if(this->PacketSeq % 100 == 0)
+  /*if(this->PacketSeq % 100 == 0)
   {
     UE_LOG(LogTemp, Warning, TEXT("Quaternion: %f, %f, %f, %f"), quat.X, quat.Y, quat.Z, quat.W);
     UE_LOG(LogTemp, Warning, TEXT("Yaw: %f"), ActorRotation.Yaw);
     UE_LOG(LogTemp, Warning, TEXT("Velocity: %f, %f, %f"), ActorRotation.Pitch, ActorRotation.Roll, ActorRotation.Yaw);
     UE_LOG(LogTemp, Warning, TEXT("Angular Velocity: %f, %f, %f"), ActorAngularVelocity.X, ActorAngularVelocity.Y, ActorAngularVelocity.Z);
-  }
+  }*/
 
   this->Odom.pose_orientation.x = quat.X;
   this->Odom.pose_orientation.y = quat.Y;
