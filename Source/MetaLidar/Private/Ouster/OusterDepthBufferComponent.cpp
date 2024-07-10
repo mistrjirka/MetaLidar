@@ -1,5 +1,34 @@
 #include "Ouster/OusterDepthBufferComponent.h"
 
+void BuildProjectionMatrix(FIntPoint InRenderTargetSize, float InFOV, float InNearClippingPlane, FMatrix& OutProjectionMatrix)
+{
+	float const XAxisMultiplier = 1.0f;
+	float const YAxisMultiplier = InRenderTargetSize.X / float(InRenderTargetSize.Y);
+
+	if ((int32)ERHIZBuffer::IsInverted)
+	{
+		OutProjectionMatrix = FReversedZPerspectiveMatrix(
+			InFOV,
+			InFOV,
+			XAxisMultiplier,
+			YAxisMultiplier,
+			InNearClippingPlane,
+			InNearClippingPlane
+			);
+	}
+	else
+	{
+		OutProjectionMatrix = FPerspectiveMatrix(
+			InFOV,
+			InFOV,
+			XAxisMultiplier,
+			YAxisMultiplier,
+			InNearClippingPlane,
+			InNearClippingPlane
+			);
+	}
+}
+
 UOusterDepthBufferComponent::UOusterDepthBufferComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
@@ -15,6 +44,12 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
 
     frequncyDelta = 1.f/config.frequency;
     cumulativeTime = 0.0f;
+}
+
+FMatrix CalculateInverseProjectionMatrix(const FMatrix& OriginalMatrix)
+{
+    // Calculate the inverse of the original projection matrix
+    return OriginalMatrix.Inverse();
 }
 
 void UOusterDepthBufferComponent::BeginPlay()
@@ -41,19 +76,21 @@ void UOusterDepthBufferComponent::InitializeCaptureComponent()
 {
     if (AActor* Owner = GetOwner())
     {
-        int32 singleSensorResolution = (config.horizontalResolution / 4)*1.5;
+        int32 singleSensorResolution = (config.horizontalResolution / 4) * 1.5;
 
         RenderTargetFront = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
         RenderTargetRight = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
         RenderTargetBack = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
         RenderTargetLeft = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
 
-        SceneCaptureFront = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 0.0f, 0.0f), RenderTargetFront);
-        SceneCaptureRight = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 90.0f, 0.0f), RenderTargetRight);
-        SceneCaptureBack = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 180.0f, 0.0f), RenderTargetBack);
-        SceneCaptureLeft = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 270.0f, 0.0f), RenderTargetLeft);
+        SceneCaptureFront = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 0.0f, 0.0f), RenderTargetFront, 90.0f);
+        SceneCaptureRight = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 90.0f, 0.0f), RenderTargetRight, 90.0f);
+        SceneCaptureBack = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 180.0f, 0.0f), RenderTargetBack, 90.0f);
+        SceneCaptureLeft = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 270.0f, 0.0f), RenderTargetLeft, 90.0f);
     }
 }
+
+
 
 void UOusterDepthBufferComponent::UpdateBuffer(UTextureRenderTarget2D* RenderTarget, TArray<FFloat16Color>& Image)
 {
@@ -73,6 +110,24 @@ void UOusterDepthBufferComponent::CaptureScene()
     UpdateBuffer(RenderTargetRight, ImageDataRight);
     UpdateBuffer(RenderTargetBack, ImageDataBack);
     UpdateBuffer(RenderTargetLeft, ImageDataLeft);
+}
+
+float CalculateDistanceCorrection(float HorizontalAngle, float VerticalAngle, float FOVH, float FOVV)
+{
+    // Convert angles to radians
+    float HorizontalAngleRad = FMath::DegreesToRadians(HorizontalAngle);
+    float VerticalAngleRad = FMath::DegreesToRadians(VerticalAngle);
+
+    // Calculate FOV in radians
+    float FOVHRad = FMath::DegreesToRadians(FOVH);
+    float FOVVRad = FMath::DegreesToRadians(FOVV);
+
+    // Calculate the correction factor based on the angles
+    float CorrectionFactorH = FMath::Cos(HorizontalAngleRad) / FMath::Cos(FOVHRad / 2.0f);
+    float CorrectionFactorV = FMath::Cos(VerticalAngleRad) / FMath::Cos(FOVVRad / 2.0f);
+
+    // Combine the horizontal and vertical correction factors
+    return CorrectionFactorH * CorrectionFactorV;
 }
 
 void UOusterDepthBufferComponent::CaptureDepth()
@@ -96,43 +151,70 @@ void UOusterDepthBufferComponent::CaptureDepth()
     }
 
     FTransform ParentTransform = ParentActor->GetActorTransform();
+
+    // Get the inverse projection matrices
+    FMatrix InverseFrontMatrix = CalculateInverseProjectionMatrix(SceneCaptureFront->CustomProjectionMatrix);
+    FMatrix InverseRightMatrix = CalculateInverseProjectionMatrix(SceneCaptureRight->CustomProjectionMatrix);
+    FMatrix InverseBackMatrix = CalculateInverseProjectionMatrix(SceneCaptureBack->CustomProjectionMatrix);
+    FMatrix InverseLeftMatrix = CalculateInverseProjectionMatrix(SceneCaptureLeft->CustomProjectionMatrix);
+
     for (int32 i = 0; i < config.horizontalResolution; i++)
     {
         float distance;
         for (int32 j = 0; j < config.verticalResolution; j++)
         {
             distance = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, VerticalAngle);
-            if(distance > 0 && distance < 6000)
+            if (distance > 0 && distance < 6000)
             {
-                float x = distance * FMath::Cos(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(VerticalAngle));
-                float y = distance * FMath::Sin(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(VerticalAngle));
-                float z = distance * FMath::Sin(FMath::DegreesToRadians(VerticalAngle));
+                float CorrectionFactor = CalculateDistanceCorrection(HorizontalAngle, VerticalAngle, SceneCaptureFront->FOVAngle, SceneCaptureFront->FOVAngle);
+                
+                // Apply the correction factor to the distance
+                float CorrectedDistance = distance / CorrectionFactor;
+
+                float x = CorrectedDistance * FMath::Cos(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(VerticalAngle));
+                float y = CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(VerticalAngle));
+                float z = CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(VerticalAngle));
+                
+                // Apply inverse matrix to correct distortion
+                FVector4 OriginalPoint(x, y, z, 1.0f);
+                //FVector4 CorrectedPoint;
+
+                /*if (HorizontalAngle <= 45.0f || HorizontalAngle > 315.0f)
+                {
+                    CorrectedPoint = InverseFrontMatrix.TransformFVector4(OriginalPoint);
+                }
+                else if (HorizontalAngle < 180.0f)
+                {
+                    CorrectedPoint = InverseRightMatrix.TransformFVector4(OriginalPoint);
+                }
+                else if (HorizontalAngle < 270.0f)
+                {
+                    CorrectedPoint = InverseBackMatrix.TransformFVector4(OriginalPoint);
+                }
+                else
+                {
+                    CorrectedPoint = InverseLeftMatrix.TransformFVector4(OriginalPoint);
+                }*/
+
                 PointXYZI point;
-                point.x = x;
-                point.y = y;
-                point.z = z;
+                point.x = OriginalPoint.X;
+                point.y = OriginalPoint.Y;
+                point.z = OriginalPoint.Z;
                 point.intensity = 1.0f;
                 PointCloud.Add(point);
 
-                FVector LocalPoint(x * 100.0f, y * 100.0f, z * 100.0f);
+                FVector LocalPoint(OriginalPoint.X * 100.0f, OriginalPoint.Y * 100.0f, OriginalPoint.Z * 100.0f);
                 FVector WorldPoint = ParentTransform.TransformPosition(LocalPoint);
 
-
                 DrawDebugPoint(GetWorld(), WorldPoint, 5.0f, FColor::Red, false, 1.0f);
-
             }
             VerticalAngle += VerticalAngleStep;
-            /*if(i%256 == 0 && j%32 == 0)
-            {
-                UE_LOG(LogTemp, Warning, TEXT("Distance at: %f at angle: %f"), distance, HorizontalAngle);
-            }*/
         }
-        
+
         HorizontalAngle += HorizontalAngleStep;
         VerticalAngle = -config.verticalFOV / 2.0f;
     }
 }
-
 uint32 UOusterDepthBufferComponent::GenerateData(uint8* data, uint32 size, uint32 timestamp)
 {
     uint32 timestamp_sec = timestamp / 1000000;
@@ -240,7 +322,7 @@ float UOusterDepthBufferComponent::GetPixelFromAngle(USceneCaptureComponent2D* S
 
     // Assuming the depth is stored in the red channel
     float DepthValue = PixelColor.R;
-    UE_LOG(LogTemp, Warning, TEXT("Depth value: %f, HorizontalAngle: %f, VerticalAngle: %f, PixelCoords: %d, %d RenderTargetSize: %d, %d"), DepthValue, HorizontalAngle, VerticalAngle, PixelCoords.X, PixelCoords.Y, Width, Height);
+    //UE_LOG(LogTemp, Warning, TEXT("Depth value: %f, HorizontalAngle: %f, VerticalAngle: %f, PixelCoords: %d, %d RenderTargetSize: %d, %d"), DepthValue, HorizontalAngle, VerticalAngle, PixelCoords.X, PixelCoords.Y, Width, Height);
     /*if(DepthValue > 1.0f)
     {
         UE_LOG(LogTemp, Warning, TEXT("Depth value is greater than 1.0f! Value: %f"), DepthValue);
@@ -256,7 +338,7 @@ UTextureRenderTarget2D* UOusterDepthBufferComponent::CreateRenderTarget(uint32 W
     return RenderTarget;
 }
 
-USceneCaptureComponent2D* UOusterDepthBufferComponent::CreateSceneCaptureComponent(FVector RelativeLocation, FRotator RelativeRotation, UTextureRenderTarget2D* RenderTarget)
+USceneCaptureComponent2D* UOusterDepthBufferComponent::CreateSceneCaptureComponent(FVector RelativeLocation, FRotator RelativeRotation, UTextureRenderTarget2D* RenderTarget, float FOV)
 {
     if (AActor* Owner = GetOwner())
     {
@@ -265,11 +347,18 @@ USceneCaptureComponent2D* UOusterDepthBufferComponent::CreateSceneCaptureCompone
         SceneCaptureComponent->RegisterComponent();
         SceneCaptureComponent->TextureTarget = RenderTarget;
         SceneCaptureComponent->CaptureSource = ESceneCaptureSource::SCS_SceneDepth;
-        SceneCaptureComponent->FOVAngle = 108.0f; // Adjust as needed
-        SceneCaptureComponent->SetRelativeLocation(RelativeLocation); // Adjust as needed
+        SceneCaptureComponent->FOVAngle = FOV; // Adjust the FOV
+        SceneCaptureComponent->SetRelativeLocation(RelativeLocation);
         SceneCaptureComponent->SetRelativeRotation(RelativeRotation);
         SceneCaptureComponent->bCaptureEveryFrame = false; // Capture on demand
         SceneCaptureComponent->bCaptureOnMovement = false;
+        
+        // Store the original projection matrix
+        FMatrix ProjectionMatrix;
+        const float ClippingPlane = (SceneCaptureComponent->bOverride_CustomNearClippingPlane) ? SceneCaptureComponent->CustomNearClippingPlane : GNearClippingPlane;
+        BuildProjectionMatrix(FIntPoint(RenderTarget->SizeX, RenderTarget->SizeY), FOV, ClippingPlane, ProjectionMatrix);
+        SceneCaptureComponent->CustomProjectionMatrix = ProjectionMatrix;
+        
         return SceneCaptureComponent;
     }
     return nullptr;

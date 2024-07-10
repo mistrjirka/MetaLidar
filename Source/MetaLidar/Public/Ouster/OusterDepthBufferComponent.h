@@ -125,5 +125,5 @@ private:
  
     UTextureRenderTarget2D* CreateRenderTarget(uint32 Width, uint32 Height);
  
-    USceneCaptureComponent2D* CreateSceneCaptureComponent(FVector RelativeLocation, FRotator RelativeRotation, UTextureRenderTarget2D* RenderTarget);
+    USceneCaptureComponent2D* CreateSceneCaptureComponent(FVector RelativeLocation, FRotator RelativeRotation, UTextureRenderTarget2D* RenderTarget, float FOV);
 };

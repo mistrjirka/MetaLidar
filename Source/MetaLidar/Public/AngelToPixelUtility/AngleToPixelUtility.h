@@ -7,11 +7,6 @@ class METALIDAR_API UAngleToPixelUtility
 {
 public:
     // Convert degrees to radians
-    static constexpr float DegreesToRadians(float degrees)
-    {
-        return degrees * PI / 180.0f;
-    }
-
     // Calculate pixel coordinates from angles and FOV
     static FIntPoint GetPixelCoordinates(float HorizontalAngle, float VerticalAngle, float FOVH, int32 Width, int32 Height)
     {
@@ -27,6 +22,10 @@ public:
         // Calculate normalized device coordinates (NDC)
         float NDC_X = FMath::Tan(HorizontalAngleRad) / FMath::Tan(FOVHRad / 2);
         float NDC_Y = FMath::Tan(VerticalAngleRad) / FMath::Tan(FOVVRad / 2);
+
+        // Limit NDC to the range [-1, 1] to prevent distortion
+        NDC_X = FMath::Clamp(NDC_X, -1.0f, 1.0f);
+        NDC_Y = FMath::Clamp(NDC_Y, -1.0f, 1.0f);
 
         // Convert NDC to pixel coordinates
         int32 PixelX = static_cast<int32>((NDC_X + 1.0f) / 2.0f * Width);
