@@ -57,6 +57,17 @@ typedef struct PointXYZI {
   uint8_t intensity;
 } PointXYZI;
 
+typedef struct PointCloud2Reduced {
+  Time time;   // Standard ROS message header
+  uint32 height; // Height of the point cloud dataset
+  uint32 width;  // Width of the point cloud dataset
+  bool is_bigendian;   // Is the data big-endian
+  uint32 point_step; // Length of a point in bytes
+  uint32 row_step;   // Length of a row in bytes
+  bool is_dense; // True if there are no invalid points (NaN or Inf)
+  PointXYZI data[];      // Actual point cloud data, size is (row_step*height)
+} PointCloud2Reduced;
+
 typedef struct
 {
   pthread_mutex_t mutex;

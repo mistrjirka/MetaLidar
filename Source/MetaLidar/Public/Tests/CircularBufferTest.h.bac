@@ -5,7 +5,7 @@
 #define UNIT_TEST_FRIEND
 #endif
 
-class CircularBufferTest : public CircularBuffer<int, 3>
+class CircularBufferTest 
 {
     public:
         CircularBufferTest();

@@ -2,11 +2,6 @@
 
 #if WITH_AUTOMATION_TESTS
 
-#ifdef UNIT_TEST_FRIEND
-#undef UNIT_TEST_FRIEND
-#endif
-#define UNIT_TEST_FRIEND friend class CircularBufferTest;
-
 #include "CircularBuffer/CircularBuffer.h"
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(CircularBufferTest, "MetaLidar.CircularBuffer", EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
