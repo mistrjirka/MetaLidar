@@ -97,6 +97,10 @@ private:
     UPROPERTY()
     uint64 packetSeq;
 
+    FMatrix inverseProjectionMatrix;
+
+    FMatrix projectionMatrix;
+    
     TArray<PointXYZI> PointCloud;
     
     std::unique_ptr<SharedMemory> shared_memory;

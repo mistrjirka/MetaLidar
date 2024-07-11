@@ -131,6 +131,29 @@ float UOusterDepthBufferComponent::CalculateDistanceCorrection(float HorizontalA
     return CorrectionFactorH * CorrectionFactorV;
 }
 
+float CalculateZAxisCompensation(float HorizontalAngle)
+{
+    // Convert the horizontal angle to radians
+    float HorizontalAngleRad = FMath::DegreesToRadians(HorizontalAngle);
+
+    // Calculate the compensation factor
+    float CompensationFactor = FMath::Cos(HorizontalAngleRad);
+
+    return CompensationFactor;
+}
+
+
+float centerAngleAroundNewZero(float angle, float newZero)
+{
+    float centeredAngle = 0;
+    if(angle > newZero){
+        centeredAngle = angle - newZero;
+    } else {
+        centeredAngle = (angle - newZero) - 360;
+    }
+    return centeredAngle;
+}
+
 void UOusterDepthBufferComponent::CaptureDepth()
 {
     if (!SceneCaptureFront || !SceneCaptureRight || !SceneCaptureBack || !SceneCaptureLeft)
@@ -167,35 +190,40 @@ void UOusterDepthBufferComponent::CaptureDepth()
             distance = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, VerticalAngle);
             if (distance > 0 && distance < 6000)
             {
-                float CorrectionFactor = CalculateDistanceCorrection(HorizontalAngle, VerticalAngle, SceneCaptureFront->FOVAngle, SceneCaptureFront->FOVAngle)/2;
+                float calculationHorizontalAngle = 0;
+                if(HorizontalAngle <= 45.0f || HorizontalAngle > 315.0f)
+                {
+                    calculationHorizontalAngle = centerAngleAroundNewZero(HorizontalAngle, 0);
+                }
+                else if(HorizontalAngle <= 135.0f)
+                {
+                    calculationHorizontalAngle = HorizontalAngle - 90;
+                }
+                else if(HorizontalAngle <= 270.0f)
+                {
+                    calculationHorizontalAngle = HorizontalAngle - 180;
+                }
+                else if (HorizontalAngle <= 315.0f)
+                {
+                    calculationHorizontalAngle = HorizontalAngle - 270;
+                }
+
+
+                float CorrectionFactor = CalculateDistanceCorrection(calculationHorizontalAngle, VerticalAngle, SceneCaptureFront->FOVAngle, SceneCaptureFront->FOVAngle)/2;
                 
                 // Apply the correction factor to the distance
                 float CorrectedDistance = distance / CorrectionFactor;
 
+                // Calculate the Z-axis compensation factor
+                float ZCompensationFactor = CalculateZAxisCompensation(calculationHorizontalAngle);                
                 float x = CorrectedDistance * FMath::Cos(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(VerticalAngle));
                 float y = CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(VerticalAngle));
-                float z = CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(VerticalAngle));
+                float z = (CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(VerticalAngle))) * ZCompensationFactor;
+
                 
                 // Apply inverse matrix to correct distortion
                 FVector4 OriginalPoint(x, y, z, 1.0f);
-                //FVector4 CorrectedPoint;
-
-                /*if (HorizontalAngle <= 45.0f || HorizontalAngle > 315.0f)
-                {
-                    CorrectedPoint = InverseFrontMatrix.TransformFVector4(OriginalPoint);
-                }
-                else if (HorizontalAngle < 180.0f)
-                {
-                    CorrectedPoint = InverseRightMatrix.TransformFVector4(OriginalPoint);
-                }
-                else if (HorizontalAngle < 270.0f)
-                {
-                    CorrectedPoint = InverseBackMatrix.TransformFVector4(OriginalPoint);
-                }
-                else
-                {
-                    CorrectedPoint = InverseLeftMatrix.TransformFVector4(OriginalPoint);
-                }*/
+                
 
                 PointXYZI point;
                 point.x = OriginalPoint.X;
@@ -282,16 +310,13 @@ float UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(f
 
     if (HorizontalAngle <= 45.0f || HorizontalAngle > 315.0f)
     {
-        if(HorizontalAngle > 315.0f)
-        {
-            HorizontalAngle = -(360.0f - HorizontalAngle);
-        }
+        HorizontalAngle = centerAngleAroundNewZero(HorizontalAngle, 0);
 
         return GetPixelFromAngle(SceneCaptureFront, RenderTargetFront, ImageDataFront, HorizontalAngle, VerticalAngle);
     }
-    /*else if (HorizontalAngle < 180.0f)
+    else if (HorizontalAngle < 135.0f)
     {
-        return GetPixelFromAngle(SceneCaptureRight, RenderTargetRight, ImageDataRight, HorizontalAngle - 90.0f, VerticalAngle);
+        return GetPixelFromAngle(SceneCaptureRight, RenderTargetRight, ImageDataRight, HorizontalAngle-90, VerticalAngle);
     }
     else if (HorizontalAngle < 270.0f)
     {
@@ -300,7 +325,7 @@ float UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(f
     else
     {
         return GetPixelFromAngle(SceneCaptureLeft, RenderTargetLeft, ImageDataLeft, HorizontalAngle - 270.0f, VerticalAngle);
-    }*/
+    }
 
    return 0.0f; 
 }
@@ -355,10 +380,11 @@ USceneCaptureComponent2D* UOusterDepthBufferComponent::CreateSceneCaptureCompone
         SceneCaptureComponent->bCaptureOnMovement = false;
         
         // Store the original projection matrix
-        FMatrix ProjectionMatrix;
+        /*FMatrix ProjectionMatrix;
         const float ClippingPlane = (SceneCaptureComponent->bOverride_CustomNearClippingPlane) ? SceneCaptureComponent->CustomNearClippingPlane : GNearClippingPlane;
         BuildProjectionMatrix(FIntPoint(RenderTarget->SizeX, RenderTarget->SizeY), FOV, ClippingPlane, ProjectionMatrix);
         SceneCaptureComponent->CustomProjectionMatrix = ProjectionMatrix;
+        SceneCaptureComponent->bUseCustomProjectionMatrix = true;*/
         
         return SceneCaptureComponent;
     }
