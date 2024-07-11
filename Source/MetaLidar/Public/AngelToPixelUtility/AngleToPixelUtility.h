@@ -23,10 +23,6 @@ public:
         float NDC_X = FMath::Tan(HorizontalAngleRad) / FMath::Tan(FOVHRad / 2);
         float NDC_Y = FMath::Tan(VerticalAngleRad) / FMath::Tan(FOVVRad / 2);
 
-        // Limit NDC to the range [-1, 1] to prevent distortion
-        NDC_X = FMath::Clamp(NDC_X, -1.0f, 1.0f);
-        NDC_Y = FMath::Clamp(NDC_Y, -1.0f, 1.0f);
-
         // Convert NDC to pixel coordinates
         int32 PixelX = static_cast<int32>((NDC_X + 1.0f) / 2.0f * Width);
         int32 PixelY = static_cast<int32>((1.0f - NDC_Y) / 2.0f * Height);

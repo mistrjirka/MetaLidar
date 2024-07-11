@@ -56,6 +56,7 @@ void UOusterDepthBufferComponent::BeginPlay()
 {
     Super::BeginPlay();
     UE_LOG(LogTemp, Warning, TEXT("OusterDepthBufferComponent BeginPlay"));
+    UE_LOG(LogTemp, Warning, TEXT("correction factor for 0,0 case %f"), CalculateDistanceCorrection(0, 0, 90, 90));
     
     this->shared_memory = std::make_unique<SharedMemory>(TCHAR_TO_ANSI(*config.MemoryLabel), config.MemorySize);
     MemoryPacket* packet = (MemoryPacket*)this->shared_memory->get_ptr();
@@ -112,7 +113,7 @@ void UOusterDepthBufferComponent::CaptureScene()
     UpdateBuffer(RenderTargetLeft, ImageDataLeft);
 }
 
-float CalculateDistanceCorrection(float HorizontalAngle, float VerticalAngle, float FOVH, float FOVV)
+float UOusterDepthBufferComponent::CalculateDistanceCorrection(float HorizontalAngle, float VerticalAngle, float FOVH, float FOVV)
 {
     // Convert angles to radians
     float HorizontalAngleRad = FMath::DegreesToRadians(HorizontalAngle);
@@ -166,7 +167,7 @@ void UOusterDepthBufferComponent::CaptureDepth()
             distance = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, VerticalAngle);
             if (distance > 0 && distance < 6000)
             {
-                float CorrectionFactor = CalculateDistanceCorrection(HorizontalAngle, VerticalAngle, SceneCaptureFront->FOVAngle, SceneCaptureFront->FOVAngle);
+                float CorrectionFactor = CalculateDistanceCorrection(HorizontalAngle, VerticalAngle, SceneCaptureFront->FOVAngle, SceneCaptureFront->FOVAngle)/2;
                 
                 // Apply the correction factor to the distance
                 float CorrectedDistance = distance / CorrectionFactor;

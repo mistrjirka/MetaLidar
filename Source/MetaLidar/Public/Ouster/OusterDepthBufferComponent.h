@@ -115,6 +115,8 @@ private:
 
     float GetPixelFromAngle(USceneCaptureComponent2D* SceneCapture, UTextureRenderTarget2D* RenderTarget, TArray<FFloat16Color>& frameBuffer, float HorizontalAngle, float VerticalAngle);
 
+    float CalculateDistanceCorrection(float HorizontalAngle, float VerticalAngle, float FOVH, float FOVV);
+
     uint32 CalculatePointStep(const TArray<PointField> &fields);
 
     uint32 GenerateData(uint8* data, uint32 size, uint32 timestamp);
