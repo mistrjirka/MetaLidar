@@ -36,7 +36,7 @@ protected:
   // Called when the game end
   virtual void EndPlay(EEndPlayReason::Type Reason) override;
 
-  void SendDataPacket(TArray<uint8> &DataToSend);
+  void SendDataPacket(uint32 time);
 
 
 public:

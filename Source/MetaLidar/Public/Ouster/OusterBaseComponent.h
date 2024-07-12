@@ -125,7 +125,7 @@ public:
    *
    * @param TimeStamp current time of game in microseconds
    */
-  void GenerateDataPacket(uint32 TimeStamp);
+  uint32 GenerateDataPacket(uint32 TimeStamp, uint8 *data);
 
   uint8 GetIntensity(std::pair<FHitResult, FRotator>) const;
 

@@ -93,15 +93,13 @@ void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason)
   Super::EndPlay(Reason);
 }
 
-void AOusterLidarActor::SendDataPacket(TArray<uint8>& wholePacket)
+void AOusterLidarActor::SendDataPacket(uint32 timestamp)
 {
-  uint32 packetSize = wholePacket.Num();
-  size_t newSizeToAllocate = sizeof(MemoryPacket) + packetSize;
+
   pthread_mutex_lock(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
   MemoryPacket* packet = (MemoryPacket*)this->shared_memory->get_ptr();
   packet->seq++;
-  packet->packet_size = packetSize;
-  FMemory::Memcpy(packet->data, wholePacket.GetData(), packetSize);
+  packet->packet_size = LidarComponent->GenerateDataPacket(PacketTimestamp, packet->data);
   pthread_mutex_unlock(&(packet->mutex));
 }
 
@@ -133,8 +131,7 @@ void AOusterLidarActor::LidarThreadTick()
   // Generate raycasting data
   LidarComponent->GetScanData();
 
-  LidarComponent->GenerateDataPacket(PacketTimestamp);
-  this->SendDataPacket(LidarComponent->Sensor.DataPacket);
+  this->SendDataPacket(PacketTimestamp);
 }
 
 void AOusterLidarActor::ConfigureUDPScan()
