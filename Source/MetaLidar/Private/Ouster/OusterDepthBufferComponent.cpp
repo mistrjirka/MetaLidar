@@ -41,6 +41,7 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
     config.MemorySize = 40000000;
     config.PointStep = 4+4+4+4;
     packetSeq = 0;
+    zoffset = 30.0f;
 
     frequncyDelta = 1.f/config.frequency;
     cumulativeTime = 0.0f;
@@ -84,10 +85,10 @@ void UOusterDepthBufferComponent::InitializeCaptureComponent()
         RenderTargetBack = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
         RenderTargetLeft = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
 
-        SceneCaptureFront = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 0.0f, 0.0f), RenderTargetFront, 90.0f);
-        SceneCaptureRight = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 90.0f, 0.0f), RenderTargetRight, 90.0f);
-        SceneCaptureBack = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 180.0f, 0.0f), RenderTargetBack, 90.0f);
-        SceneCaptureLeft = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, 10.0f), FRotator(0.0f, 270.0f, 0.0f), RenderTargetLeft, 90.0f);
+        SceneCaptureFront = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 0.0f, 0.0f), RenderTargetFront, 90.0f);
+        SceneCaptureRight = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 90.0f, 0.0f), RenderTargetRight, 90.0f);
+        SceneCaptureBack = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 180.0f, 0.0f), RenderTargetBack, 90.0f);
+        SceneCaptureLeft = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 270.0f, 0.0f), RenderTargetLeft, 90.0f);
     }
 }
 
@@ -143,16 +144,60 @@ float CalculateZAxisCompensation(float HorizontalAngle)
 }
 
 
-float centerAngleAroundNewZero(float angle, float newZero)
+float centerAngleAroundNewZero(float angle)
 {
-    float centeredAngle = 0;
-    if(angle > newZero){
-        centeredAngle = angle - newZero;
-    } else {
-        centeredAngle = (angle - newZero) - 360;
+    float centeredAngle = angle;
+    if(angle >= 180.0f)
+    {
+        centeredAngle = angle - 360.0f;
     }
+
     return centeredAngle;
 }
+
+
+float UOusterDepthBufferComponent::NormalizedAngle(float HorizontalAngle)
+{
+    float calculationHorizontalAngle = 0;
+    if(HorizontalAngle < 45.0f || HorizontalAngle >= 315.0f)
+    {
+        calculationHorizontalAngle = centerAngleAroundNewZero(HorizontalAngle);
+    }
+    else if(HorizontalAngle < 135.0f)
+    {
+        calculationHorizontalAngle = HorizontalAngle - 90;
+    }
+    else if(HorizontalAngle < 225.0f)
+    {
+        calculationHorizontalAngle = HorizontalAngle - 180;
+    }
+    else if (HorizontalAngle < 315.0f)
+    {
+        calculationHorizontalAngle = HorizontalAngle - 270;
+    }
+    return calculationHorizontalAngle;
+
+}
+
+float UOusterDepthBufferComponent::AdjustVerticalAngleForCircle(float HorizontalAngle, float VerticalAngle)
+{
+    // Get the normalized horizontal angle
+    
+    float nAngle = NormalizedAngle(HorizontalAngle);
+
+
+    // Calculate the adjustment factor
+    float AdjustmentFactor = FMath::Cos(FMath::DegreesToRadians(nAngle));
+
+    // Apply the adjustment to the vertical angle
+    float AdjustedVerticalAngle = VerticalAngle * AdjustmentFactor;
+    if((int)HorizontalAngle % 30 ==0 && (int)VerticalAngle % 15 == 0){
+        UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Normalized Angle: %f, Vertical Angle: %f, Adjusted Vertical Angle: %f, Factor %f"), HorizontalAngle, nAngle, VerticalAngle, AdjustedVerticalAngle, AdjustmentFactor);
+    }
+
+    return AdjustedVerticalAngle;
+}
+
 
 void UOusterDepthBufferComponent::CaptureDepth()
 {
@@ -165,10 +210,11 @@ void UOusterDepthBufferComponent::CaptureDepth()
     PointCloud.Empty();
 
     float HorizontalAngle = 0.0f;
-    float VerticalAngle = -config.verticalFOV / 2.0f;
+    float VerticalAngle = 0;
     float HorizontalAngleStep = 360.0f / config.horizontalResolution;
     float VerticalAngleStep = config.verticalFOV / config.verticalResolution;
     AActor* ParentActor = GetOwner();
+    
     if (!ParentActor)
     {
         return;
@@ -176,49 +222,32 @@ void UOusterDepthBufferComponent::CaptureDepth()
 
     FTransform ParentTransform = ParentActor->GetActorTransform();
 
-    // Get the inverse projection matrices
-    FMatrix InverseFrontMatrix = CalculateInverseProjectionMatrix(SceneCaptureFront->CustomProjectionMatrix);
-    FMatrix InverseRightMatrix = CalculateInverseProjectionMatrix(SceneCaptureRight->CustomProjectionMatrix);
-    FMatrix InverseBackMatrix = CalculateInverseProjectionMatrix(SceneCaptureBack->CustomProjectionMatrix);
-    FMatrix InverseLeftMatrix = CalculateInverseProjectionMatrix(SceneCaptureLeft->CustomProjectionMatrix);
-
     for (int32 i = 0; i < config.horizontalResolution; i++)
     {
         float distance;
         for (int32 j = 0; j < config.verticalResolution; j++)
         {
-            distance = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, VerticalAngle);
+            // Adjust the vertical angle for a circular pattern based on the horizontal angle
+            float AdjustedVerticalAngle = VerticalAngle/* AdjustVerticalAngleForCircle(HorizontalAngle, VerticalAngle)*/;
+            AdjustedVerticalAngle -= config.verticalFOV / 2.0f;
+            distance = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle);
             if (distance > 0 && distance < 6000)
             {
-                float calculationHorizontalAngle = 0;
-                if(HorizontalAngle <= 45.0f || HorizontalAngle > 315.0f)
-                {
-                    calculationHorizontalAngle = centerAngleAroundNewZero(HorizontalAngle, 0);
-                }
-                else if(HorizontalAngle <= 135.0f)
-                {
-                    calculationHorizontalAngle = HorizontalAngle - 90;
-                }
-                else if(HorizontalAngle <= 270.0f)
-                {
-                    calculationHorizontalAngle = HorizontalAngle - 180;
-                }
-                else if (HorizontalAngle <= 315.0f)
-                {
-                    calculationHorizontalAngle = HorizontalAngle - 270;
-                }
+                
+                float calculationHorizontalAngle = NormalizedAngle(HorizontalAngle);
 
 
-                float CorrectionFactor = CalculateDistanceCorrection(calculationHorizontalAngle, VerticalAngle, SceneCaptureFront->FOVAngle, SceneCaptureFront->FOVAngle)/2;
+                float CorrectionFactor = CalculateDistanceCorrection(calculationHorizontalAngle, AdjustedVerticalAngle, SceneCaptureFront->FOVAngle, SceneCaptureFront->FOVAngle)/2;
                 
                 // Apply the correction factor to the distance
                 float CorrectedDistance = distance / CorrectionFactor;
 
                 // Calculate the Z-axis compensation factor
-                float ZCompensationFactor = CalculateZAxisCompensation(calculationHorizontalAngle);                
-                float x = CorrectedDistance * FMath::Cos(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(VerticalAngle));
-                float y = CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(VerticalAngle));
-                float z = (CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(VerticalAngle))) * ZCompensationFactor;
+                float ZCompensationFactor = CalculateZAxisCompensation(calculationHorizontalAngle);
+
+                float x = CorrectedDistance * FMath::Cos(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(AdjustedVerticalAngle));
+                float y = CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(AdjustedVerticalAngle));
+                float z = (CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(AdjustedVerticalAngle))) * ZCompensationFactor + zoffset/100.f;
 
                 
                 // Apply inverse matrix to correct distortion
@@ -241,7 +270,7 @@ void UOusterDepthBufferComponent::CaptureDepth()
         }
 
         HorizontalAngle += HorizontalAngleStep;
-        VerticalAngle = -config.verticalFOV / 2.0f;
+        VerticalAngle = 0;
     }
 }
 uint32 UOusterDepthBufferComponent::GenerateData(uint8* data, uint32 size, uint32 timestamp)
@@ -308,23 +337,24 @@ float UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(f
         return 0.0f;
     }
 
-    if (HorizontalAngle <= 45.0f || HorizontalAngle > 315.0f)
-    {
-        HorizontalAngle = centerAngleAroundNewZero(HorizontalAngle, 0);
+    float calculationHorizontalAngle = NormalizedAngle(HorizontalAngle);
 
-        return GetPixelFromAngle(SceneCaptureFront, RenderTargetFront, ImageDataFront, HorizontalAngle, VerticalAngle);
+
+    if (HorizontalAngle < 45.0f || HorizontalAngle >= 315.0f)
+    {
+        return GetPixelFromAngle(SceneCaptureFront, RenderTargetFront, ImageDataFront, calculationHorizontalAngle, VerticalAngle);
     }
     else if (HorizontalAngle < 135.0f)
     {
-        return GetPixelFromAngle(SceneCaptureRight, RenderTargetRight, ImageDataRight, HorizontalAngle-90, VerticalAngle);
+        return GetPixelFromAngle(SceneCaptureRight, RenderTargetRight, ImageDataRight, calculationHorizontalAngle, VerticalAngle);
     }
-    else if (HorizontalAngle < 270.0f)
+    else if (HorizontalAngle < 225.0f)
     {
-        return GetPixelFromAngle(SceneCaptureBack, RenderTargetBack, ImageDataBack, HorizontalAngle - 180.0f, VerticalAngle);
+        return GetPixelFromAngle(SceneCaptureBack, RenderTargetBack, ImageDataBack, calculationHorizontalAngle, VerticalAngle);
     }
-    else
+    else if (HorizontalAngle < 315.0f)
     {
-        return GetPixelFromAngle(SceneCaptureLeft, RenderTargetLeft, ImageDataLeft, HorizontalAngle - 270.0f, VerticalAngle);
+        return GetPixelFromAngle(SceneCaptureLeft, RenderTargetLeft, ImageDataLeft, calculationHorizontalAngle, VerticalAngle);
     }
 
    return 0.0f; 
@@ -353,7 +383,7 @@ float UOusterDepthBufferComponent::GetPixelFromAngle(USceneCaptureComponent2D* S
     {
         UE_LOG(LogTemp, Warning, TEXT("Depth value is greater than 1.0f! Value: %f"), DepthValue);
     }*/
-    return DepthValue/100;
+    return DepthValue/100.f;
 }
 
 UTextureRenderTarget2D* UOusterDepthBufferComponent::CreateRenderTarget(uint32 Width, uint32 Height)

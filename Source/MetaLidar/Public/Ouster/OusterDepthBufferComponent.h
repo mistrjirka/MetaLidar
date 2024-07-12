@@ -97,6 +97,9 @@ private:
     UPROPERTY()
     uint64 packetSeq;
 
+    UPROPERTY()
+    float zoffset;
+
     FMatrix inverseProjectionMatrix;
 
     FMatrix projectionMatrix;
@@ -107,9 +110,13 @@ private:
 
     void InitializeCaptureComponent();
 
+    float AdjustVerticalAngleForCircle(float HorizontalAngle, float VerticalAngle);
+
     void CaptureDepth();
     
     void CaptureScene();
+
+    float NormalizedAngle(float HorizontalAngle);
 
     void UpdateBuffer(UTextureRenderTarget2D*, TArray<FFloat16Color>&);
 
