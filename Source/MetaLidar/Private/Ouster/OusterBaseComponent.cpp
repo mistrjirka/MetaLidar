@@ -193,11 +193,11 @@ void UOusterBaseComponent::ConfigureOusterSensor()
     Sensor.ElevationAngle.Append(Elevation, UE_ARRAY_COUNT(Elevation));
     Sensor.VerticalResolution = 128;
     Sensor.SamplingRate = EOusterFrequency::SRO05;
-    Sensor.HorizontalResolution = 2048;
+    Sensor.HorizontalResolution = 1024;
     Sensor.fields.Add(PointField(FString(TEXT("x")), 0, PointField::FLOAT32, 1));
     Sensor.fields.Add(PointField(FString(TEXT("y")), 4, PointField::FLOAT32, 1));
     Sensor.fields.Add(PointField(FString(TEXT("z")), 8, PointField::FLOAT32, 1));
-    Sensor.fields.Add(PointField(FString(TEXT("Intensity")), 12, PointField::UINT8, 1));
+    Sensor.fields.Add(PointField(FString(TEXT("Intensity")), 12, PointField::FLOAT32, 1));
 
     Sensor.PointStep = this->CalculatePointStep(Sensor.fields);
     UE_LOG(LogTemp, Warning, TEXT("PointStep: %d"), Sensor.PointStep);
@@ -220,7 +220,7 @@ void UOusterBaseComponent::ConfigureOusterSensor()
   switch (SamplingRate.GetValue())
   {
   case 0:
-    Sensor.SamplingRate = 5;
+    Sensor.SamplingRate = 1;
     break;
   case 1:
     Sensor.SamplingRate = 10;
@@ -578,64 +578,61 @@ uint8 UOusterBaseComponent::GetIntensity(std::pair<FHitResult, FRotator> hitPair
 
 uint32 UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp, uint8 *target)
 {
-    PointCloud2Reduced *pointCloud = (PointCloud2Reduced *)target;
+  PointCloud2Reduced *pointCloud = (PointCloud2Reduced *)target;
 
-  TRACE_CPUPROFILER_EVENT_SCOPE_STR("Fancy work 2")
+  uint32_t timestamp_sec = TimeStamp / 1000000;
+  uint32 timestamp_nsec = (TimeStamp % 1000000) * 1000;
+
+  uint32_t numOfPoints = 0;
+
+  // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
+  //      Sensor.RecordedHits.Num());
+  AActor *Owner = GetOwner();
+
+  for (int i = 0; i < Sensor.RecordedHits.Num(); i++)
   {
-
-    uint32_t timestamp_sec = TimeStamp / 1000000;
-    uint32_t timestamp_nsec = TimeStamp * 1000;
-    Sensor.DataPacket.Empty();
-    pointCloud->time.sec = timestamp_sec;
-    pointCloud->time.nsec = timestamp_nsec;
-    pointCloud->height = 1;
-    pointCloud->is_bigendian = false;
-    pointCloud->point_step = Sensor.PointStep;
-    pointCloud->is_dense = true;
-    uint32_t numOfPoints = 0;
-
-    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket: %d"),
-    //      Sensor.RecordedHits.Num());
-    AActor *Owner = GetOwner();
-
-    int count = 0;
-
-    for (int i = 0; i < Sensor.RecordedHits.Num(); i++)
+    if (!Sensor.RecordedHits[i].first.IsValidBlockingHit())
     {
-      if (!Sensor.RecordedHits[i].first.IsValidBlockingHit())
-      {
-        continue;
-      }
-      PointXYZI *Point = &(pointCloud->data[numOfPoints]);
-
-      // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket in forloop: %d"), i);
-      FHitResult hit = Sensor.RecordedHits[i].first;
-      auto PhysMat = hit.PhysMaterial;
-      if (PhysMat != nullptr)
-      {
-        Point->intensity = GetNoiseForIntensity(GetIntensity(Sensor.RecordedHits[i]));
-      }
-      else
-      {
-        Point->intensity = 0.f;
-      }
-      FVector Location = CreateLocationNoise(hit, Point->intensity);
-      FRotator Rotation = Sensor.RecordedHits[i].second;
-      FVector HitNormal = hit.ImpactNormal;
-
-      // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
-      FVector RelativeLocation = Sensor.Transform.InverseTransformPosition(Location);
-      // RelativeLocation = LidarRotation.UnrotateVector(RelativeLocation);
-      //   Rotate the point around the origin
-      Point->x = RelativeLocation.X / 100.f;
-      Point->y = -RelativeLocation.Y / 100.f;
-      Point->z = RelativeLocation.Z / 100.f;
-
-      numOfPoints++;
+      continue;
     }
-    pointCloud->width = numOfPoints;
-    pointCloud->row_step = numOfPoints;
+
+
+    PointXYZI Point;
+    FHitResult hit = Sensor.RecordedHits[i].first;
+    auto PhysMat = hit.PhysMaterial;
+    if (PhysMat != nullptr)
+    {
+      Point.intensity = GetNoiseForIntensity(GetIntensity(Sensor.RecordedHits[i]));
+    }
+    else
+    {
+      Point.intensity = 0.f;
+    }
+    FVector Location = CreateLocationNoise(hit, Point.intensity);
+    FRotator Rotation = Sensor.RecordedHits[i].second;
+    FVector HitNormal = hit.ImpactNormal;
+
+    // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
+    FVector RelativeLocation = Sensor.Transform.InverseTransformPosition(Location);
+    // RelativeLocation = LidarRotation.UnrotateVector(RelativeLocation);
+    //   Rotate the point around the origin
+    Point.x = RelativeLocation.X / 100.f;
+    Point.y = -RelativeLocation.Y / 100.f;
+    Point.z = RelativeLocation.Z / 100.f;
+    pointCloud->data[numOfPoints++] = Point;
   }
+  //UE_LOG(LogTemp, Warning, TEXT("Num of Points: %d"), numOfPoints);
+
+  pointCloud->height = 1;
+  pointCloud->width = numOfPoints;
+  pointCloud->is_bigendian = false;
+  pointCloud->point_step = Sensor.PointStep;
+  pointCloud->row_step = pointCloud->width;
+
+  pointCloud->time.sec = timestamp_sec;
+  pointCloud->time.nsec = timestamp_nsec;
+  pointCloud->is_dense = true;
+
   return sizeof(PointCloud2Reduced) + pointCloud->width * pointCloud->point_step;
 }
 

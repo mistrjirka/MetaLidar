@@ -1,5 +1,5 @@
 #include "Ouster/OusterDepthBufferComponent.h"
-
+/*
 void BuildProjectionMatrix(FIntPoint InRenderTargetSize, float InFOV, float InNearClippingPlane, FMatrix& OutProjectionMatrix)
 {
 	float const XAxisMultiplier = 1.0f;
@@ -27,7 +27,7 @@ void BuildProjectionMatrix(FIntPoint InRenderTargetSize, float InFOV, float InNe
 			InNearClippingPlane
 			);
 	}
-}
+}*/
 
 UOusterDepthBufferComponent::UOusterDepthBufferComponent()
 {

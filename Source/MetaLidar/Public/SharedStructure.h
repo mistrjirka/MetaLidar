@@ -54,7 +54,7 @@ typedef struct PointXYZI {
   float x;
   float y;
   float z;
-  uint8_t intensity;
+  float intensity;
 } PointXYZI;
 
 typedef struct PointCloud2Reduced {

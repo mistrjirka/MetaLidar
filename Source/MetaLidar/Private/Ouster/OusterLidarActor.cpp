@@ -95,9 +95,9 @@ void AOusterLidarActor::EndPlay(EEndPlayReason::Type Reason)
 
 void AOusterLidarActor::SendDataPacket(uint32 timestamp)
 {
-
-  pthread_mutex_lock(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
   MemoryPacket* packet = (MemoryPacket*)this->shared_memory->get_ptr();
+  
+  pthread_mutex_lock(&((MemoryPacket*)this->shared_memory->get_ptr())->mutex);
   packet->seq++;
   packet->packet_size = LidarComponent->GenerateDataPacket(PacketTimestamp, packet->data);
   pthread_mutex_unlock(&(packet->mutex));
