@@ -610,15 +610,16 @@ uint32 UOusterBaseComponent::GenerateDataPacket(uint32 TimeStamp, uint8 *target)
     }
     FVector Location = CreateLocationNoise(hit, Point.intensity);
     FRotator Rotation = Sensor.RecordedHits[i].second;
-    FVector HitNormal = hit.ImpactNormal;
 
     // UE_LOG(LogTemp, Warning, TEXT("GenerateDataPacket before location: %f"), Location.X);
     FVector RelativeLocation = Sensor.Transform.InverseTransformPosition(Location);
     // RelativeLocation = LidarRotation.UnrotateVector(RelativeLocation);
     //   Rotate the point around the origin
     Point.x = RelativeLocation.X / 100.f;
-    Point.y = -RelativeLocation.Y / 100.f;
+    Point.y = RelativeLocation.Y / 100.f;
     Point.z = RelativeLocation.Z / 100.f;
+
+    Point = MathToolkit::ConvertUEToROS(Point);
     pointCloud->data[numOfPoints++] = Point;
   }
   //UE_LOG(LogTemp, Warning, TEXT("Num of Points: %d"), numOfPoints);

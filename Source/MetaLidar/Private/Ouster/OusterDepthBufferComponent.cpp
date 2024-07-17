@@ -36,7 +36,7 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
     config.horizontalResolution = 1024;
     config.verticalResolution = 128;
     config.verticalFOV = 45.0f;
-    config.frequency = 1;
+    config.frequency = 10;
     config.MemoryLabel = "/t07ySQdKFH_meta_lidar";
     config.MemorySize = 40000000;
     config.PointStep = 4+4+4+4;
@@ -259,12 +259,15 @@ void UOusterDepthBufferComponent::CaptureDepth()
                 point.y = OriginalPoint.Y;
                 point.z = OriginalPoint.Z;
                 point.intensity = 1.0f;
+
+                point = MathToolkit::ConvertUEToROS(point);
+
                 PointCloud.Add(point);
 
                 FVector LocalPoint(OriginalPoint.X * 100.0f, OriginalPoint.Y * 100.0f, OriginalPoint.Z * 100.0f);
                 FVector WorldPoint = ParentTransform.TransformPosition(LocalPoint);
 
-                DrawDebugPoint(GetWorld(), WorldPoint, 5.0f, FColor::Red, false, 1.0f);
+                //DrawDebugPoint(GetWorld(), WorldPoint, 5.0f, FColor::Red, false, 1.0f);
             }
             VerticalAngle += VerticalAngleStep;
         }

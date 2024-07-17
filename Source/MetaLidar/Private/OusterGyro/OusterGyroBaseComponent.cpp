@@ -63,6 +63,7 @@ void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
 {
   uint32 TimeStamp_sec = TimeStamp / 10e6;
   FVector ActorVelocity = this->Parent->GetVelocity();
+  ActorVelocity = MathToolkit::ConvertUEToROS(ActorVelocity);
 
   FRotator ActorRotation = this->Parent->GetActorRotation();
   ActorVelocity = ActorRotation.UnrotateVector(ActorVelocity);
@@ -76,6 +77,7 @@ void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
   ActorRotationRadians.Y = FMath::DegreesToRadians(ActorRotation.Pitch);
   ActorRotationRadians.Z = FMath::DegreesToRadians(ActorRotation.Yaw);
 
+  ActorRotationRadians = MathToolkit::ConvertUEToROSAngle(ActorRotationRadians);
   //UE_LOG(LogTemp, Warning, TEXT("Rotation: %f, %f, %f"), ActorRotationRadians.X, ActorRotationRadians.Y, ActorRotationRadians.Z);
   this->RotationBuffer.put(std::pair<FVector, uint32>(ActorRotationRadians, TimeStamp_sec));
   MathToolkit::calculateLinearFit(this->RotationBuffer, ROTATION_BUFFER_SIZE, this->linear_fit_a_rot, this->linear_fit_b_rot, false);

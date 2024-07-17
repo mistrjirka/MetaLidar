@@ -62,3 +62,37 @@ void MathToolkit::calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t siz
     UE_LOG(LogTemp, Warning, TEXT("Resulting Linear fit: %f, %f, %f, %f, %f, %f"), vector_fit_a[0], vector_fit_a[1], vector_fit_a[2], vector_fit_b[0], vector_fit_b[1], vector_fit_b[2]);
   }
 }
+
+FVector MathToolkit::ConvertUEToROS(const FVector& UEVector)
+{
+    // Convert Unreal Engine coordinates (left-handed) to ROS coordinates (right-handed)
+    FVector ROSVector;
+    ROSVector.X = UEVector.X;
+    ROSVector.Y = -UEVector.Y;
+    ROSVector.Z = UEVector.Z;
+
+    return ROSVector;
+}
+
+FVector MathToolkit::ConvertUEToROSAngle(const FVector& rotation)
+{
+    // Convert Unreal Engine angles (left-handed) to ROS angles (right-handed)
+    FVector ROSRotation;
+    ROSRotation.X = -rotation.X;
+    ROSRotation.Y = -rotation.Y;
+    ROSRotation.Z = rotation.Z;
+
+    return ROSRotation;
+}
+
+PointXYZI MathToolkit::ConvertUEToROS(const PointXYZI& UEPoint)
+{
+    // Convert Unreal Engine coordinates (left-handed) to ROS coordinates (right-handed)
+    PointXYZI ROSPoint;
+    ROSPoint.x = UEPoint.x;
+    ROSPoint.y = -UEPoint.y;
+    ROSPoint.z = UEPoint.z;
+    ROSPoint.intensity = UEPoint.intensity;
+
+    return ROSPoint;
+}
