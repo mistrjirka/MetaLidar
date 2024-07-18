@@ -74,13 +74,48 @@ FVector MathToolkit::ConvertUEToROS(const FVector& UEVector)
     return ROSVector;
 }
 
-FVector MathToolkit::ConvertUEToROSAngle(const FVector& rotation)
+FVector MathToolkit::ConvertUEToROSAngleDegree(const FVector& rotation)
 {
     // Convert Unreal Engine angles (left-handed) to ROS angles (right-handed)
     FVector ROSRotation;
     ROSRotation.X = -rotation.X;
-    ROSRotation.Y = -rotation.Y;
-    ROSRotation.Z = rotation.Z;
+    ROSRotation.Y = rotation.Y;
+    ROSRotation.Z = -rotation.Z;
+    if(ROSRotation.Z < 0)
+    {
+      ROSRotation.Z += 360;
+    }
+    if(ROSRotation.X < 0)
+    {
+      ROSRotation.X += 360;
+    }
+    if(ROSRotation.Y < 0)
+    {
+      ROSRotation.Y += 360;
+    }
+
+    return ROSRotation;
+}
+
+FRotator MathToolkit::ConvertUEToROSAngleDegree(const FRotator& rotation)
+{
+    // Convert Unreal Engine angles (left-handed) to ROS angles (right-handed)
+    FRotator ROSRotation;
+    ROSRotation.Pitch = -rotation.Pitch;
+    ROSRotation.Roll = rotation.Roll;
+    ROSRotation.Yaw = -rotation.Yaw;
+    if(ROSRotation.Yaw < 0)
+    {
+      ROSRotation.Yaw += 360;
+    }
+    if(ROSRotation.Pitch < 0)
+    {
+      ROSRotation.Pitch += 360;
+    }
+    if(ROSRotation.Roll < 0)
+    {
+      ROSRotation.Roll += 360;
+    }
 
     return ROSRotation;
 }

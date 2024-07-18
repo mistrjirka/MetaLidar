@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
-
+#include "Math/UnrealMathUtility.h"
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Kismet/KismetMathLibrary.h"
@@ -92,7 +92,6 @@ public:
 private:
   uint32 LastTimeStamp;
   uint32 LastTimeSnapshotStamp;
-  FRotator CurrentRotation;
   CircularBuffer<std::pair<FVector, uint32>, ACCELERATION_BUFFER_SIZE> AccelerationBuffer;
   CircularBuffer<std::pair<FVector, uint32>, ROTATION_BUFFER_SIZE> RotationBuffer;
   
@@ -100,14 +99,22 @@ private:
   FVector linear_fit_b_vel;
   FVector linear_fit_a_rot;
   FVector linear_fit_b_rot;
+  
+  FVector CurrentVelocity;
+  FRotator CurrentRotation;
 
-  FVector CurrentPosition;
+
+  FVector BeginPosition;
+  FRotator BeginRotation;
+  bool ready;
 
   Odometry OdomData;
 
   float Gravity;
   UWorld *CurrentWorld;
   uint32 PacketSeq;
+
+  void SnapshotCurrentData();
 
   float GenerateGaussianNoise(float mean, float stdDev);
 
@@ -135,6 +142,9 @@ private:
   void TakeSnapshot(uint32 TimeStamp);
 
   void GenerateOdomData(uint32 TimeStamp);
+  FVector GetRosVelocity();
+  FVector GetRosCurrentPosition();
+  FRotator GetRosCurrentRotation();
 
   bool ReadyToProcess();
 

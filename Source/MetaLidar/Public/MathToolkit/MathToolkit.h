@@ -11,7 +11,10 @@ public:
 
     static PointXYZI ConvertUEToROS(const PointXYZI& UEPoint);
 
-    static FVector ConvertUEToROSAngle(const FVector& rotation);
+    static FVector ConvertUEToROSAngleDegree(const FVector& rotation);
+
+    static FRotator ConvertUEToROSAngleDegree(const FRotator& rotation);
+
 
     template <typename T, size_t S>
     static void calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector &vector_fit_a, FVector &vector_fit_b, bool print = false);
