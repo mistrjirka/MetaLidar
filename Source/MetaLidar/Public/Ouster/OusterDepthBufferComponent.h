@@ -13,6 +13,7 @@
 #include <cmath>
 #include <tuple>
 #include <pthread.h>
+#include <atomic>
 #include "AngelToPixelUtility/AngleToPixelUtility.h"
 #include "SharedMemory/SharedMemory.h"
 #include "Math/Float16Color.h"
@@ -48,6 +49,7 @@ protected:
 
 public:
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+    void AsyncCapture();
 
 private:
     UPROPERTY()
@@ -100,6 +102,10 @@ private:
     UPROPERTY()
     float zoffset;
 
+    std::atomic<bool> readySendingData;
+
+    bool captureReady;
+
     FMatrix inverseProjectionMatrix;
 
     FMatrix projectionMatrix;
@@ -109,6 +115,7 @@ private:
     std::unique_ptr<SharedMemory> shared_memory;
 
     void InitializeCaptureComponent();
+
 
     float AdjustVerticalAngleForCircle(float HorizontalAngle, float VerticalAngle);
 

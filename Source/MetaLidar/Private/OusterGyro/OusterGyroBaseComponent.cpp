@@ -154,14 +154,14 @@ FRotator UOusterGyroBaseComponent::GetRosCurrentRotation()
 bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 {
   double time = static_cast<double>(TimeStamp);
-  {
-    TRACE_CPUPROFILER_EVENT_SCOPE_STR("Gyro generation")
+  
     float TimeBetween = (TimeStamp - LastTimeStamp) / 1000000.0;
     if (TimeBetween <= 1.f / (this->Sensor.Frequency))
     {
       return false;
     }
-
+{
+    TRACE_CPUPROFILER_EVENT_SCOPE_STR("Gyro generation")
     if (this->Parent == nullptr)
     {
       UE_LOG(LogTemp, Warning, TEXT("Parent is null!"));
@@ -252,7 +252,7 @@ void UOusterGyroBaseComponent::GenerateOdomData(uint32 TimeStamp)
   FVector ActorAngularVelocity = this->GetActorRotationSpeed(time);
   FQuat quat = FQuat(GetRosCurrentRotation());
 
-  UE_LOG(LogTemp, Warning, TEXT("Yaw: %f Position: %f, %f, %f"), GetRosCurrentRotation().Yaw, rosPosition.X, rosPosition.Y, rosPosition.Z);
+  //UE_LOG(LogTemp, Warning, TEXT("Yaw: %f Position: %f, %f, %f"), GetRosCurrentRotation().Yaw, rosPosition.X, rosPosition.Y, rosPosition.Z);
 
   /*if(this->PacketSeq % 100 == 0)
   {
@@ -272,20 +272,20 @@ void UOusterGyroBaseComponent::GenerateOdomData(uint32 TimeStamp)
     this->Odom.pose_covariance[i] = -1;
     this->Odom.twist_covariance[i] = -1;
   }
-
+/*
   this->Odom.twist_linear.x =0;
   this->Odom.twist_linear.y = 0;
   this->Odom.twist_linear.z = 0;
   this->Odom.twist_angular.x = 0;
   this->Odom.twist_angular.y = 0;
   this->Odom.twist_angular.z = 0;
-  /*
+  /*/
   this->Odom.twist_linear.x = ActorVelocity.X;
   this->Odom.twist_linear.y = ActorVelocity.Y;
   this->Odom.twist_linear.z = ActorVelocity.Z;
   this->Odom.twist_angular.x = ActorAngularVelocity.X;
   this->Odom.twist_angular.y = ActorAngularVelocity.Y;
-  this->Odom.twist_angular.z = ActorAngularVelocity.Z;*/
+  this->Odom.twist_angular.z = ActorAngularVelocity.Z;
 }
 
 FVector UOusterGyroBaseComponent::GetActorLinearAccel(double time)

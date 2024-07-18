@@ -1,4 +1,6 @@
 #include "Ouster/OusterDepthBufferComponent.h"
+#include <cstring>
+
 /*
 void BuildProjectionMatrix(FIntPoint InRenderTargetSize, float InFOV, float InNearClippingPlane, FMatrix& OutProjectionMatrix)
 {
@@ -32,6 +34,8 @@ void BuildProjectionMatrix(FIntPoint InRenderTargetSize, float InFOV, float InNe
 UOusterDepthBufferComponent::UOusterDepthBufferComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
+    captureReady = false;
+    readySendingData.store(true);
 
     config.horizontalResolution = 1024;
     config.verticalResolution = 128;
@@ -78,7 +82,7 @@ void UOusterDepthBufferComponent::InitializeCaptureComponent()
 {
     if (AActor* Owner = GetOwner())
     {
-        int32 singleSensorResolution = (config.horizontalResolution / 4) * 1.5;
+        int32 singleSensorResolution = (config.horizontalResolution / 4) * 1.2;
 
         RenderTargetFront = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
         RenderTargetRight = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
@@ -205,9 +209,7 @@ void UOusterDepthBufferComponent::CaptureDepth()
     {
         return;
     }
-    CaptureScene();
 
-    PointCloud.Empty();
 
     float HorizontalAngle = 0.0f;
     float VerticalAngle = 0;
@@ -288,6 +290,8 @@ uint32 UOusterDepthBufferComponent::GenerateData(uint8* data, uint32 size, uint3
     pointCloud->point_step = config.PointStep;
     pointCloud->row_step = pointCloud->width;
     pointCloud->is_dense = true;
+
+    //FPlatformMemory::Memcpy(PointCloud.GetData(), pointCloud->data, PointCloud.Num() * sizeof(PointXYZI));
     for(int i = 0; i < PointCloud.Num(); i++)
     {
         pointCloud->data[i] = PointCloud[i];
@@ -311,16 +315,15 @@ uint32 UOusterDepthBufferComponent::GetTimestampMicroseconds()
   return (uint32)(fmod(GetWorld()->GetTimeSeconds(), 3600.f) * 1000000);  // sec -> microsec
 }
 
+
 void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
     cumulativeTime += DeltaTime;
     
-    if(packetReady)
-    {
-        packetReady = false;
-        GenerateDataPacket(this->GetTimestampMicroseconds());
-    }
+    
+
+    
 
 
     if(cumulativeTime < frequncyDelta)
@@ -328,9 +331,32 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
        return;
     }
 
-    cumulativeTime = 0.0f;
-    CaptureDepth();
-    packetReady = true;
+    if(readySendingData.load() == true)
+    {
+        if(captureReady == false)
+        {
+            CaptureScene();
+            PointCloud.Empty();
+            captureReady = true;
+            return;
+        }
+
+        
+        readySendingData.store(false);
+        AsyncTask(ENamedThreads::AnyThread, [this]()
+        {
+            this->CaptureDepth();
+            this->GenerateDataPacket(this->GetTimestampMicroseconds());
+            readySendingData.store(true);
+        });
+        
+    
+
+
+        cumulativeTime = 0.0f;
+        captureReady = false;
+    }
+
 }
 
 float UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle)
