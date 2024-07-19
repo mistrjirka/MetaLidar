@@ -18,23 +18,22 @@
 #include "SharedMemory/SharedMemory.h"
 #include "Math/Float16Color.h"
 
-
 #include "OusterDepthBufferComponent.generated.h"
 
 USTRUCT()
-struct FSensorConfig {
+struct FSensorConfig
+{
     GENERATED_BODY()
-    public:
-        uint32 horizontalResolution;
-        uint32 verticalResolution;
-        uint32 frequency;
-        float verticalFOV;
-        FString MemoryLabel;
-        uint32 MemorySize;
-        uint32 PointStep;
-        uint32 RowStep;
+public:
+    uint32 horizontalResolution;
+    uint32 verticalResolution;
+    uint32 frequency;
+    float verticalFOV;
+    FString MemoryLabel;
+    uint32 MemorySize;
+    uint32 PointStep;
+    uint32 RowStep;
 };
-
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class METALIDAR_API UOusterDepthBufferComponent : public UActorComponent
@@ -48,35 +47,27 @@ protected:
     virtual void BeginPlay() override;
 
 public:
-    virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+    virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction *ThisTickFunction) override;
 
 private:
     UPROPERTY()
     FSensorConfig config;
 
-    UPROPERTY()
-    USceneCaptureComponent2D* SceneCaptureFront;
+    TObjectPtr<USceneCaptureComponent2D> SceneCaptureFront;
 
-    UPROPERTY()
-    UTextureRenderTarget2D* RenderTargetFront;
+    TObjectPtr<UTextureRenderTarget2D> RenderTargetFront;
 
-    UPROPERTY()
-    USceneCaptureComponent2D* SceneCaptureRight;
+    TObjectPtr<USceneCaptureComponent2D> SceneCaptureRight;
 
-    UPROPERTY()
-    UTextureRenderTarget2D* RenderTargetRight;
+    TObjectPtr<UTextureRenderTarget2D> RenderTargetRight;
 
-    UPROPERTY()
-    USceneCaptureComponent2D* SceneCaptureBack;
+    TObjectPtr<USceneCaptureComponent2D> SceneCaptureBack;
 
-    UPROPERTY()
-    UTextureRenderTarget2D* RenderTargetBack;
+    TObjectPtr<UTextureRenderTarget2D> RenderTargetBack;
 
-    UPROPERTY()
-    USceneCaptureComponent2D* SceneCaptureLeft;
+    TObjectPtr<USceneCaptureComponent2D> SceneCaptureLeft;
 
-    UPROPERTY()
-    UTextureRenderTarget2D* RenderTargetLeft;
+    TObjectPtr<UTextureRenderTarget2D> RenderTargetLeft;
 
     TArray<FFloat16Color> ImageDataFront;
 
@@ -86,14 +77,14 @@ private:
 
     TArray<FFloat16Color> ImageDataLeft;
 
+
     UPROPERTY()
     float frequncyDelta;
 
     UPROPERTY()
     float cumulativeTime;
 
-    UPROPERTY()
-    bool packetReady;
+    std::atomic<bool> packetReady;
 
     UPROPERTY()
     uint64 packetSeq;
@@ -103,46 +94,45 @@ private:
 
     std::atomic<bool> readySendingData;
 
-    bool captureReady;
+    std::atomic<bool> captureReady;
 
     FMatrix inverseProjectionMatrix;
 
     FMatrix projectionMatrix;
-    
+
     TArray<PointXYZI> PointCloud;
-    
+
     std::unique_ptr<SharedMemory> shared_memory;
 
     void InitializeCaptureComponent();
 
-
     float AdjustVerticalAngleForCircle(float HorizontalAngle, float VerticalAngle);
 
     void CaptureDepth();
-    
+
     void CaptureScene();
 
     float NormalizedAngle(float HorizontalAngle);
 
-    void UpdateBuffer(UTextureRenderTarget2D*, TArray<FFloat16Color>&);
+    void UpdateBuffer(TObjectPtr<UTextureRenderTarget2D> , TArray<FFloat16Color> &);
 
     float GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle);
 
     void GenerateDataPacket(uint64 timestamp);
 
-    float GetPixelFromAngle(USceneCaptureComponent2D* SceneCapture, UTextureRenderTarget2D* RenderTarget, TArray<FFloat16Color>& frameBuffer, float HorizontalAngle, float VerticalAngle);
+    float GetPixelFromAngle(TObjectPtr<USceneCaptureComponent2D> SceneCapture, TObjectPtr<UTextureRenderTarget2D> RenderTarget, TArray<FFloat16Color> &frameBuffer, float HorizontalAngle, float VerticalAngle);
 
     float CalculateDistanceCorrection(float HorizontalAngle, float VerticalAngle, float FOVH, float FOVV);
 
     uint32 CalculatePointStep(const TArray<PointField> &fields);
 
-    uint32 GenerateData(uint8* data, uint32 size, uint32 timestamp);
+    uint32 GenerateData(uint8 *data, uint32 size, uint32 timestamp);
 
     void GenerateDataPacket(uint32 TimeStamp);
 
     uint32 GetTimestampMicroseconds();
- 
-    UTextureRenderTarget2D* CreateRenderTarget(uint32 Width, uint32 Height);
- 
-    USceneCaptureComponent2D* CreateSceneCaptureComponent(FVector RelativeLocation, FRotator RelativeRotation, UTextureRenderTarget2D* RenderTarget, float FOV);
+
+    TObjectPtr<UTextureRenderTarget2D> CreateRenderTarget(uint32 Width, uint32 Height);
+
+    TObjectPtr<USceneCaptureComponent2D> CreateSceneCaptureComponent(FVector RelativeLocation, FRotator RelativeRotation, TObjectPtr<UTextureRenderTarget2D> RenderTarget, float FOV);
 };

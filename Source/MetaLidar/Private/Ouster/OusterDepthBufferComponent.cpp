@@ -1,36 +1,6 @@
 #include "Ouster/OusterDepthBufferComponent.h"
 #include <cstring>
 
-/*
-void BuildProjectionMatrix(FIntPoint InRenderTargetSize, float InFOV, float InNearClippingPlane, FMatrix& OutProjectionMatrix)
-{
-	float const XAxisMultiplier = 1.0f;
-	float const YAxisMultiplier = InRenderTargetSize.X / float(InRenderTargetSize.Y);
-
-	if ((int32)ERHIZBuffer::IsInverted)
-	{
-		OutProjectionMatrix = FReversedZPerspectiveMatrix(
-			InFOV,
-			InFOV,
-			XAxisMultiplier,
-			YAxisMultiplier,
-			InNearClippingPlane,
-			InNearClippingPlane
-			);
-	}
-	else
-	{
-		OutProjectionMatrix = FPerspectiveMatrix(
-			InFOV,
-			InFOV,
-			XAxisMultiplier,
-			YAxisMultiplier,
-			InNearClippingPlane,
-			InNearClippingPlane
-			);
-	}
-}*/
-
 UOusterDepthBufferComponent::UOusterDepthBufferComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
@@ -43,15 +13,15 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
     config.frequency = 10;
     config.MemoryLabel = "/t07ySQdKFH_meta_lidar";
     config.MemorySize = 40000000;
-    config.PointStep = 4+4+4+4;
+    config.PointStep = 4 + 4 + 4 + 4;
     packetSeq = 0;
     zoffset = 30.0f;
 
-    frequncyDelta = 1.f/config.frequency;
+    frequncyDelta = 1.f / config.frequency;
     cumulativeTime = 0.0f;
 }
 
-FMatrix CalculateInverseProjectionMatrix(const FMatrix& OriginalMatrix)
+FMatrix CalculateInverseProjectionMatrix(const FMatrix &OriginalMatrix)
 {
     // Calculate the inverse of the original projection matrix
     return OriginalMatrix.Inverse();
@@ -62,11 +32,12 @@ void UOusterDepthBufferComponent::BeginPlay()
     Super::BeginPlay();
     UE_LOG(LogTemp, Warning, TEXT("OusterDepthBufferComponent BeginPlay"));
     UE_LOG(LogTemp, Warning, TEXT("correction factor for 0,0 case %f"), CalculateDistanceCorrection(0, 0, 90, 90));
-    
+
     this->shared_memory = std::make_unique<SharedMemory>(TCHAR_TO_ANSI(*config.MemoryLabel), config.MemorySize);
-    MemoryPacket* packet = (MemoryPacket*)this->shared_memory->get_ptr();
+    MemoryPacket *packet = (MemoryPacket *)this->shared_memory->get_ptr();
     packet->seq = 0;
     packet->packet_size = 0;
+    readySendingData.store(true);
 
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
@@ -74,13 +45,12 @@ void UOusterDepthBufferComponent::BeginPlay()
     pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
     pthread_mutex_init(&(packet->mutex), &attr);
 
-    
     InitializeCaptureComponent();
 }
 
 void UOusterDepthBufferComponent::InitializeCaptureComponent()
 {
-    if (AActor* Owner = GetOwner())
+    if (AActor *Owner = GetOwner())
     {
         int32 singleSensorResolution = (config.horizontalResolution / 4) * 1.2;
 
@@ -96,26 +66,20 @@ void UOusterDepthBufferComponent::InitializeCaptureComponent()
     }
 }
 
-
-
-void UOusterDepthBufferComponent::UpdateBuffer(UTextureRenderTarget2D* RenderTarget, TArray<FFloat16Color>& Image)
+void UOusterDepthBufferComponent::UpdateBuffer(TObjectPtr<UTextureRenderTarget2D> RenderTarget, TArray<FFloat16Color> &Image)
 {
-    FTextureRenderTargetResource* RenderTargetResource = RenderTarget->GameThread_GetRenderTargetResource();
+    FTextureRenderTargetResource *RenderTargetResource = RenderTarget->GameThread_GetRenderTargetResource();
     RenderTargetResource->ReadFloat16Pixels(Image);
 }
 
 void UOusterDepthBufferComponent::CaptureScene()
 {
+    TRACE_CPUPROFILER_EVENT_SCOPE_STR("Depth buffer capture screen")
 
     SceneCaptureFront->CaptureScene();
     SceneCaptureRight->CaptureScene();
     SceneCaptureBack->CaptureScene();
     SceneCaptureLeft->CaptureScene();
-
-    UpdateBuffer(RenderTargetFront, ImageDataFront);
-    UpdateBuffer(RenderTargetRight, ImageDataRight);
-    UpdateBuffer(RenderTargetBack, ImageDataBack);
-    UpdateBuffer(RenderTargetLeft, ImageDataLeft);
 }
 
 float UOusterDepthBufferComponent::CalculateDistanceCorrection(float HorizontalAngle, float VerticalAngle, float FOVH, float FOVV)
@@ -147,11 +111,10 @@ float CalculateZAxisCompensation(float HorizontalAngle)
     return CompensationFactor;
 }
 
-
 float centerAngleAroundNewZero(float angle)
 {
     float centeredAngle = angle;
-    if(angle >= 180.0f)
+    if (angle >= 180.0f)
     {
         centeredAngle = angle - 360.0f;
     }
@@ -159,19 +122,18 @@ float centerAngleAroundNewZero(float angle)
     return centeredAngle;
 }
 
-
 float UOusterDepthBufferComponent::NormalizedAngle(float HorizontalAngle)
 {
     float calculationHorizontalAngle = 0;
-    if(HorizontalAngle < 45.0f || HorizontalAngle >= 315.0f)
+    if (HorizontalAngle < 45.0f || HorizontalAngle >= 315.0f)
     {
         calculationHorizontalAngle = centerAngleAroundNewZero(HorizontalAngle);
     }
-    else if(HorizontalAngle < 135.0f)
+    else if (HorizontalAngle < 135.0f)
     {
         calculationHorizontalAngle = HorizontalAngle - 90;
     }
-    else if(HorizontalAngle < 225.0f)
+    else if (HorizontalAngle < 225.0f)
     {
         calculationHorizontalAngle = HorizontalAngle - 180;
     }
@@ -180,28 +142,26 @@ float UOusterDepthBufferComponent::NormalizedAngle(float HorizontalAngle)
         calculationHorizontalAngle = HorizontalAngle - 270;
     }
     return calculationHorizontalAngle;
-
 }
 
 float UOusterDepthBufferComponent::AdjustVerticalAngleForCircle(float HorizontalAngle, float VerticalAngle)
 {
     // Get the normalized horizontal angle
-    
-    float nAngle = NormalizedAngle(HorizontalAngle);
 
+    float nAngle = NormalizedAngle(HorizontalAngle);
 
     // Calculate the adjustment factor
     float AdjustmentFactor = FMath::Cos(FMath::DegreesToRadians(nAngle));
 
     // Apply the adjustment to the vertical angle
     float AdjustedVerticalAngle = VerticalAngle * AdjustmentFactor;
-    if((int)HorizontalAngle % 30 ==0 && (int)VerticalAngle % 15 == 0){
-        UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Normalized Angle: %f, Vertical Angle: %f, Adjusted Vertical Angle: %f, Factor %f"), HorizontalAngle, nAngle, VerticalAngle, AdjustedVerticalAngle, AdjustmentFactor);
+    if ((int)HorizontalAngle % 30 == 0 && (int)VerticalAngle % 15 == 0)
+    {
+        //UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Normalized Angle: %f, Vertical Angle: %f, Adjusted Vertical Angle: %f, Factor %f"), HorizontalAngle, nAngle, VerticalAngle, AdjustedVerticalAngle, AdjustmentFactor);
     }
 
     return AdjustedVerticalAngle;
 }
-
 
 void UOusterDepthBufferComponent::CaptureDepth()
 {
@@ -210,13 +170,12 @@ void UOusterDepthBufferComponent::CaptureDepth()
         return;
     }
 
-
     float HorizontalAngle = 0.0f;
     float VerticalAngle = 0;
     float HorizontalAngleStep = 360.0f / config.horizontalResolution;
     float VerticalAngleStep = config.verticalFOV / config.verticalResolution;
-    AActor* ParentActor = GetOwner();
-    
+    AActor *ParentActor = GetOwner();
+
     if (!ParentActor)
     {
         return;
@@ -230,17 +189,16 @@ void UOusterDepthBufferComponent::CaptureDepth()
         for (int32 j = 0; j < config.verticalResolution; j++)
         {
             // Adjust the vertical angle for a circular pattern based on the horizontal angle
-            float AdjustedVerticalAngle = VerticalAngle/* AdjustVerticalAngleForCircle(HorizontalAngle, VerticalAngle)*/;
+            float AdjustedVerticalAngle = VerticalAngle /* AdjustVerticalAngleForCircle(HorizontalAngle, VerticalAngle)*/;
             AdjustedVerticalAngle -= config.verticalFOV / 2.0f;
             distance = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle);
             if (distance > 0 && distance < 6000)
             {
-                
+
                 float calculationHorizontalAngle = NormalizedAngle(HorizontalAngle);
 
+                float CorrectionFactor = CalculateDistanceCorrection(calculationHorizontalAngle, AdjustedVerticalAngle, SceneCaptureFront->FOVAngle, SceneCaptureFront->FOVAngle) / 2;
 
-                float CorrectionFactor = CalculateDistanceCorrection(calculationHorizontalAngle, AdjustedVerticalAngle, SceneCaptureFront->FOVAngle, SceneCaptureFront->FOVAngle)/2;
-                
                 // Apply the correction factor to the distance
                 float CorrectedDistance = distance / CorrectionFactor;
 
@@ -249,12 +207,10 @@ void UOusterDepthBufferComponent::CaptureDepth()
 
                 float x = CorrectedDistance * FMath::Cos(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(AdjustedVerticalAngle));
                 float y = CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(AdjustedVerticalAngle));
-                float z = (CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(AdjustedVerticalAngle))) * ZCompensationFactor + zoffset/100.f;
+                float z = (CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(AdjustedVerticalAngle))) * ZCompensationFactor + zoffset / 100.f;
 
-                
                 // Apply inverse matrix to correct distortion
                 FVector4 OriginalPoint(x, y, z, 1.0f);
-                
 
                 PointXYZI point;
                 point.x = OriginalPoint.X;
@@ -269,7 +225,7 @@ void UOusterDepthBufferComponent::CaptureDepth()
                 FVector LocalPoint(OriginalPoint.X * 100.0f, OriginalPoint.Y * 100.0f, OriginalPoint.Z * 100.0f);
                 FVector WorldPoint = ParentTransform.TransformPosition(LocalPoint);
 
-                //DrawDebugPoint(GetWorld(), WorldPoint, 5.0f, FColor::Red, false, 1.0f);
+                // DrawDebugPoint(GetWorld(), WorldPoint, 5.0f, FColor::Red, false, 1.0f);
             }
             VerticalAngle += VerticalAngleStep;
         }
@@ -278,12 +234,12 @@ void UOusterDepthBufferComponent::CaptureDepth()
         VerticalAngle = 0;
     }
 }
-uint32 UOusterDepthBufferComponent::GenerateData(uint8* data, uint32 size, uint32 timestamp)
+uint32 UOusterDepthBufferComponent::GenerateData(uint8 *data, uint32 size, uint32 timestamp)
 {
     uint32 timestamp_sec = timestamp / 1000000;
     uint32 timestamp_nsec = (timestamp % 1000000) * 1000;
     size_t packet_size = 0;
-    PointCloud2Reduced* pointCloud = (PointCloud2Reduced*)data;
+    PointCloud2Reduced *pointCloud = (PointCloud2Reduced *)data;
     pointCloud->height = 1;
     pointCloud->width = PointCloud.Num();
     pointCloud->is_bigendian = false;
@@ -291,18 +247,18 @@ uint32 UOusterDepthBufferComponent::GenerateData(uint8* data, uint32 size, uint3
     pointCloud->row_step = pointCloud->width;
     pointCloud->is_dense = true;
 
-    //FPlatformMemory::Memcpy(PointCloud.GetData(), pointCloud->data, PointCloud.Num() * sizeof(PointXYZI));
-    for(int i = 0; i < PointCloud.Num(); i++)
+    // FPlatformMemory::Memcpy(PointCloud.GetData(), pointCloud->data, PointCloud.Num() * sizeof(PointXYZI));
+    for (int i = 0; i < PointCloud.Num(); i++)
     {
         pointCloud->data[i] = PointCloud[i];
     }
 
-    return  sizeof(PointCloud2Reduced) + pointCloud->width * pointCloud->point_step;
+    return sizeof(PointCloud2Reduced) + pointCloud->width * pointCloud->point_step;
 }
 
 void UOusterDepthBufferComponent::GenerateDataPacket(uint32 TimeStamp)
 {
-    MemoryPacket* packet = (MemoryPacket*)this->shared_memory->get_ptr();
+    MemoryPacket *packet = (MemoryPacket *)this->shared_memory->get_ptr();
     uint32 available_size = this->config.MemorySize - sizeof(MemoryPacket);
     pthread_mutex_lock(&(packet->mutex));
     packet->seq++;
@@ -312,51 +268,48 @@ void UOusterDepthBufferComponent::GenerateDataPacket(uint32 TimeStamp)
 
 uint32 UOusterDepthBufferComponent::GetTimestampMicroseconds()
 {
-  return (uint32)(fmod(GetWorld()->GetTimeSeconds(), 3600.f) * 1000000);  // sec -> microsec
+    return (uint32)(fmod(GetWorld()->GetTimeSeconds(), 3600.f) * 1000000); // sec -> microsec
 }
 
-
-void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction *ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
     cumulativeTime += DeltaTime;
-    
-    
 
-    
-
-
-    if(cumulativeTime < frequncyDelta)
-    { 
-       return;
+    if (cumulativeTime < frequncyDelta)
+    {
+        return;
     }
 
-    if(readySendingData.load() == true)
+    if (!captureReady.load())
     {
-        if(captureReady == false)
-        {
-            CaptureScene();
-            PointCloud.Empty();
-            captureReady = true;
-            return;
-        }
 
-        
+        CaptureScene();
+        captureReady.store(true);
+        return;
+    }
+
+    if (readySendingData.load())
+    {
+        TRACE_CPUPROFILER_EVENT_SCOPE_STR("sending data")
+        {
+            TRACE_CPUPROFILER_EVENT_SCOPE_STR("Updating depth buffers")
+            UpdateBuffer(RenderTargetFront, ImageDataFront);
+            UpdateBuffer(RenderTargetRight, ImageDataRight);
+            UpdateBuffer(RenderTargetBack, ImageDataBack);
+            UpdateBuffer(RenderTargetLeft, ImageDataLeft);
+        }
         readySendingData.store(false);
         AsyncTask(ENamedThreads::AnyThread, [this]()
-        {
+                  {
+            PointCloud.Reset();
             this->CaptureDepth();
+            captureReady.store(false);   
             this->GenerateDataPacket(this->GetTimestampMicroseconds());
-            readySendingData.store(true);
-        });
-        
-    
-
+            readySendingData.store(true); });
 
         cumulativeTime = 0.0f;
-        captureReady = false;
     }
-
 }
 
 float UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle)
@@ -367,7 +320,6 @@ float UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(f
     }
 
     float calculationHorizontalAngle = NormalizedAngle(HorizontalAngle);
-
 
     if (HorizontalAngle < 45.0f || HorizontalAngle >= 315.0f)
     {
@@ -386,10 +338,10 @@ float UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(f
         return GetPixelFromAngle(SceneCaptureLeft, RenderTargetLeft, ImageDataLeft, calculationHorizontalAngle, VerticalAngle);
     }
 
-   return 0.0f; 
+    return 0.0f;
 }
 
-float UOusterDepthBufferComponent::GetPixelFromAngle(USceneCaptureComponent2D* SceneCapture, UTextureRenderTarget2D* RenderTarget, TArray<FFloat16Color>& frameBuffer, float HorizontalAngle, float VerticalAngle)
+float UOusterDepthBufferComponent::GetPixelFromAngle(TObjectPtr<USceneCaptureComponent2D> SceneCapture, TObjectPtr<UTextureRenderTarget2D> RenderTarget, TArray<FFloat16Color> &frameBuffer, float HorizontalAngle, float VerticalAngle)
 {
     int32 Width = RenderTarget->SizeX;
     int32 Height = RenderTarget->SizeY;
@@ -398,36 +350,38 @@ float UOusterDepthBufferComponent::GetPixelFromAngle(USceneCaptureComponent2D* S
     FIntPoint PixelCoords = UAngleToPixelUtility::GetPixelCoordinates(HorizontalAngle, VerticalAngle, FOVH, Width, Height);
     FFloat16Color PixelColor;
 
-    if(frameBuffer.Num() <= Width * PixelCoords.Y + PixelCoords.X)
+    if (frameBuffer.Num() <= Width * PixelCoords.Y + PixelCoords.X)
     {
         UE_LOG(LogTemp, Error, TEXT("FrameBuffer is not large enough! Coords: %d, %d, HorizontalAngle: %f, VerticalAngle: %f Size: %d"), PixelCoords.X, PixelCoords.Y, HorizontalAngle, VerticalAngle, frameBuffer.Num());
-    } else {
+    }
+    else
+    {
         PixelColor = frameBuffer[PixelCoords.Y * Width + PixelCoords.X];
     }
 
     // Assuming the depth is stored in the red channel
     float DepthValue = PixelColor.R;
-    //UE_LOG(LogTemp, Warning, TEXT("Depth value: %f, HorizontalAngle: %f, VerticalAngle: %f, PixelCoords: %d, %d RenderTargetSize: %d, %d"), DepthValue, HorizontalAngle, VerticalAngle, PixelCoords.X, PixelCoords.Y, Width, Height);
+    // UE_LOG(LogTemp, Warning, TEXT("Depth value: %f, HorizontalAngle: %f, VerticalAngle: %f, PixelCoords: %d, %d RenderTargetSize: %d, %d"), DepthValue, HorizontalAngle, VerticalAngle, PixelCoords.X, PixelCoords.Y, Width, Height);
     /*if(DepthValue > 1.0f)
     {
         UE_LOG(LogTemp, Warning, TEXT("Depth value is greater than 1.0f! Value: %f"), DepthValue);
     }*/
-    return DepthValue/100.f;
+    return DepthValue / 100.f;
 }
 
-UTextureRenderTarget2D* UOusterDepthBufferComponent::CreateRenderTarget(uint32 Width, uint32 Height)
+TObjectPtr<UTextureRenderTarget2D> UOusterDepthBufferComponent::CreateRenderTarget(uint32 Width, uint32 Height)
 {
-    UTextureRenderTarget2D* RenderTarget = NewObject<UTextureRenderTarget2D>();
+    TObjectPtr<UTextureRenderTarget2D> RenderTarget = NewObject<UTextureRenderTarget2D>();
     RenderTarget->InitAutoFormat(Width, Height);
     RenderTarget->RenderTargetFormat = ETextureRenderTargetFormat::RTF_R32f; // Using 32-bit float format for depth
     return RenderTarget;
 }
 
-USceneCaptureComponent2D* UOusterDepthBufferComponent::CreateSceneCaptureComponent(FVector RelativeLocation, FRotator RelativeRotation, UTextureRenderTarget2D* RenderTarget, float FOV)
+TObjectPtr<USceneCaptureComponent2D> UOusterDepthBufferComponent::CreateSceneCaptureComponent(FVector RelativeLocation, FRotator RelativeRotation, TObjectPtr<UTextureRenderTarget2D> RenderTarget, float FOV)
 {
-    if (AActor* Owner = GetOwner())
+    if (AActor *Owner = GetOwner())
     {
-        USceneCaptureComponent2D* SceneCaptureComponent = NewObject<USceneCaptureComponent2D>(Owner);
+        TObjectPtr<USceneCaptureComponent2D> SceneCaptureComponent = NewObject<USceneCaptureComponent2D>(Owner);
         SceneCaptureComponent->AttachToComponent(Owner->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
         SceneCaptureComponent->RegisterComponent();
         SceneCaptureComponent->TextureTarget = RenderTarget;
@@ -437,16 +391,15 @@ USceneCaptureComponent2D* UOusterDepthBufferComponent::CreateSceneCaptureCompone
         SceneCaptureComponent->SetRelativeRotation(RelativeRotation);
         SceneCaptureComponent->bCaptureEveryFrame = false; // Capture on demand
         SceneCaptureComponent->bCaptureOnMovement = false;
-        
+
         // Store the original projection matrix
         /*FMatrix ProjectionMatrix;
         const float ClippingPlane = (SceneCaptureComponent->bOverride_CustomNearClippingPlane) ? SceneCaptureComponent->CustomNearClippingPlane : GNearClippingPlane;
         BuildProjectionMatrix(FIntPoint(RenderTarget->SizeX, RenderTarget->SizeY), FOV, ClippingPlane, ProjectionMatrix);
         SceneCaptureComponent->CustomProjectionMatrix = ProjectionMatrix;
         SceneCaptureComponent->bUseCustomProjectionMatrix = true;*/
-        
+
         return SceneCaptureComponent;
     }
     return nullptr;
 }
-

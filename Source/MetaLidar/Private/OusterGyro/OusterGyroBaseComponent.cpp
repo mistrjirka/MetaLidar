@@ -205,7 +205,7 @@ bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
     this->Sensor.DataPacket.SetNum(sizeof(OusterGyroData));
     OusterGyroData* Data = reinterpret_cast<OusterGyroData*>(this->Sensor.DataPacket.GetData());
     FRotator angles = GetRosCurrentRotation();
-    UE_LOG(LogTemp, Warning, TEXT("Yaw: %f"), angles.Yaw);
+    //UE_LOG(LogTemp, Warning, TEXT("Yaw: %f"), angles.Yaw);
     FQuat quat = FQuat(angles);
 
     Data->seq = this->PacketSeq++;
