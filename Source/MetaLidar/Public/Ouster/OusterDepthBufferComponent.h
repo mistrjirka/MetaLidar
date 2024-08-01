@@ -111,12 +111,47 @@ private:
     void CaptureDepth();
 
     void CaptureScene();
+    std::pair<FVector,FVector> calculateSphericalFromDepth(
+        float distance, 
+        float HorizontalAngle, 
+        float VerticalAngle, 
+        float FOVH, 
+        float FOVV
+    );
+    FVector GetCoordinateToAngleAccurate(
+        TObjectPtr<USceneCaptureComponent2D> SceneCapture, 
+        TObjectPtr<UTextureRenderTarget2D> RenderTarget, 
+        TArray<FFloat16Color> &frameBuffer,
+        float horizontal, 
+        float vertical, 
+        uint32 width,
+        uint32 height,
+        float horizontalOffset,
+        uint32 x_offset=0, 
+        uint32 y_offset=0
+    );
+
+
+
+    FVector GetCoordinateToAngle(
+        TObjectPtr<USceneCaptureComponent2D> SceneCapture, 
+        TObjectPtr<UTextureRenderTarget2D> RenderTarget, 
+        TArray<FFloat16Color> &frameBuffer,
+        float horizontal, 
+        float vertical, 
+        uint32 width,
+        uint32 height,
+        float horizontalOffset,
+        uint32 x_offset=0, 
+        uint32 y_offset=0,
+        uint32 step=0
+    );
 
     float NormalizedAngle(float HorizontalAngle);
 
     void UpdateBuffer(TObjectPtr<UTextureRenderTarget2D> , TArray<FFloat16Color> &);
 
-    float GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle);
+    FVector GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle);
 
     void GenerateDataPacket(uint64 timestamp);
 
