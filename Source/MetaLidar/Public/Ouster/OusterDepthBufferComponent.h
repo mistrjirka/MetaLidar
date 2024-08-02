@@ -17,6 +17,7 @@
 #include "AngelToPixelUtility/AngleToPixelUtility.h"
 #include "SharedMemory/SharedMemory.h"
 #include "Math/Float16Color.h"
+#include "ThreadSafeArray/TThreadSafeArray.h"
 
 #include "OusterDepthBufferComponent.generated.h"
 
@@ -100,7 +101,7 @@ private:
 
     FMatrix projectionMatrix;
 
-    TArray<PointXYZI> PointCloud;
+    TThreadSafeArray<PointXYZI> PointCloud;
 
     std::unique_ptr<SharedMemory> shared_memory;
 
@@ -111,13 +112,16 @@ private:
     void CaptureDepth();
 
     void CaptureScene();
+
     std::pair<FVector,FVector> calculateSphericalFromDepth(
         float distance, 
-        float HorizontalAngle, 
-        float VerticalAngle, 
+        float x, 
+        float y, 
         float FOVH, 
-        float FOVV
+        uint32 width,
+        uint32 height
     );
+
     FVector GetCoordinateToAngleAccurate(
         TObjectPtr<USceneCaptureComponent2D> SceneCapture, 
         TObjectPtr<UTextureRenderTarget2D> RenderTarget, 

@@ -33,7 +33,7 @@ void UOusterDepthBufferComponent::BeginPlay()
 {
     Super::BeginPlay();
     config.horizontalResolution = 2048;
-    config.verticalResolution = 64;
+    config.verticalResolution = 128;
     UE_LOG(LogTemp, Warning, TEXT("OusterDepthBufferComponent BeginPlay"));
     UE_LOG(LogTemp, Warning, TEXT("correction factor for 0,0 case %f"), CalculateDistanceCorrection(0, 0, 90, 90));
     UE_LOG(LogTemp, Warning, TEXT("horizontal resolution %d, vertical resolution %d, vertical fov %f, frequency %d"), config.horizontalResolution, config.verticalResolution, config.verticalFOV, config.frequency);
@@ -57,8 +57,8 @@ void UOusterDepthBufferComponent::InitializeCaptureComponent()
 {
     if (AActor *Owner = GetOwner())
     {
-        int32 singleSensorResolution = (config.horizontalResolution / 4) * 4;
-        int32 verticalResolution = singleSensorResolution;//singleSensorResolution * (config.verticalFOV / 90.0f)*1.5;
+        int32 singleSensorResolution = fmax((config.horizontalResolution / 4) * 4, 100);
+        int32 verticalResolution = singleSensorResolution * (config.verticalFOV / 90.0f)*1.5;
         
         RenderTargetFront = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
         RenderTargetRight = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
@@ -169,29 +169,33 @@ float UOusterDepthBufferComponent::AdjustVerticalAngleForCircle(float Horizontal
     return AdjustedVerticalAngle;
 }
 std::pair<FVector,FVector> UOusterDepthBufferComponent::calculateSphericalFromDepth(
-        float distance, 
-        float HorizontalAngle, 
-        float VerticalAngle, 
+        float Depth, 
+        float x, 
+        float y, 
         float FOVH, 
-        float FOVV
+        uint32 width,
+        uint32 height
 )
 {
-    float CorrectionFactor = CalculateDistanceCorrection(HorizontalAngle, VerticalAngle, FOVH, FOVV) / 2;
+    Depth *= 0.01;
 
-    // Apply the correction factor to the distance
-    float CorrectedDistance = distance / CorrectionFactor;
+    float NDC_X = (2.0f * x) / width - 1.0f;
+    float NDC_Y = 1.0f - (2.0f * y) / height;
 
-    // Calculate the Z-axis compensation factor
-    float ZCompensationFactor = CalculateZAxisCompensation(HorizontalAngle);
+    // Calculate the vertical FOV in radians
+    float AspectRatio = static_cast<float>(width) / height;
+    float FOVHRad = FMath::DegreesToRadians(FOVH);
+    float FOVVRad = 2.0f * FMath::Atan(FMath::Tan(FOVHRad / 2.0f) / AspectRatio);
 
-    float x = CorrectedDistance * FMath::Cos(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(VerticalAngle));
-    float y = CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(HorizontalAngle)) * FMath::Cos(FMath::DegreesToRadians(VerticalAngle));
-    float z = (CorrectedDistance * FMath::Sin(FMath::DegreesToRadians(VerticalAngle))) * ZCompensationFactor;
-    
+    // Convert NDC to view space (camera-relative coordinates)
+    float CameraX = Depth;
+    float CameraY = NDC_X * Depth * FMath::Tan(FOVHRad / 2.0f);
+    float CameraZ = NDC_Y * Depth * FMath::Tan(FOVVRad / 2.0f);
 
 
     // Apply inverse matrix to correct distortion
-    FVector point(x, y, z);
+    FVector point(CameraX, CameraY, CameraZ);
+    point *= 100;
     //point /= 1000; 
 
     //convert to spherical coordinates
@@ -235,7 +239,7 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
     int32 RenderWidth = RenderTarget->SizeX;
     int32 RenderHeight = RenderTarget->SizeY;
     float FOVH = SceneCapture->FOVAngle;
-    float FOVV = SceneCapture->FOVAngle * (RenderHeight / RenderWidth);
+    //float FOVV = SceneCapture->FOVAngle * (RenderHeight / RenderWidth);
 
     AActor *ParentActor = GetOwner();
 
@@ -252,19 +256,24 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
         for(uint32 j = y_offset; j < y_offset + height; j++)
         {
             count++;
-            float HorizontalAngle =(i - (float)RenderWidth / 2.f)/(float)RenderWidth * (float)FOVH;
-            float VerticalAngle = -(j - (float)RenderHeight / 2.f)/(float)RenderHeight * (float)FOVV;
+            
             //UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f"), HorizontalAngle, VerticalAngle);
             // Adjust the vertical angle for a circular pattern based on the horizontal angle
             if(j*RenderWidth + i >= frameBuffer.Num())
             {
-                UE_LOG(LogTemp, Error, TEXT("FrameBuffer is not large enough! Coords: %d, %d, HorizontalAngle: %f, VerticalAngle: %f Size: %d"), i, j, HorizontalAngle, VerticalAngle, frameBuffer.Num());
+                UE_LOG(LogTemp, Error, TEXT("FrameBuffer is not large enough! Coords: %d, %d, HorizontalAngle: %f, VerticalAngle: %f Size: %d"), i, j, 0, 0, frameBuffer.Num());
                 continue;
             }
             FFloat16Color color = frameBuffer[(j * RenderWidth) + i];
-            float distance = color.R;
-
-            std::pair<FVector,FVector> coords = calculateSphericalFromDepth(distance, HorizontalAngle, VerticalAngle, FOVH, FOVV);
+            float Depth = color.R;
+           
+            // Convert view space to world space
+            // DrawDebugPoint(GetWorld(), WorldCoordinates, 5.0f, FColor::Red, false, 1.0f);
+            //Draw line from camera to point
+            //DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), WorldCoordinates, FColor::Blue, false, 1/config.frequency, 0, 0.1f);
+            
+            
+            std::pair<FVector,FVector> coords = calculateSphericalFromDepth(Depth, i, j, FOVH, RenderWidth, RenderHeight);
             FVector spherical = coords.first;
             FVector point = coords.second;
             
@@ -273,14 +282,13 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
             float vCoord = spherical.Z;
 
             float newError = FMath::Abs(vCoord - FMath::DegreesToRadians(vertical)) + FMath::Abs(hCoord - FMath::DegreesToRadians(horizontal));
-            //DrawDebugPoint(GetWorld(), ParentTransform.TransformPosition(point), 5.0f, FColor::Red, false, (1/config.frequency)*1.5);
 
             //DrawDebugString(GetWorld(), ParentTransform.TransformPosition(result), FString::Printf(TEXT("h: %f V %f \nTh: %f Tv: %f\n E: %f"), FMath::RadiansToDegrees(hCoord), FMath::RadiansToDegrees(vCoord),horizontal, vertical, newError), nullptr, FColor::Red, (1/config.frequency)*1.5, false);
             if(newError < error)
             {
                 //UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f, Target horizontal angle %f, Target vertical angle %f, Theta (h)  %f, Phi (V) %f, Distance: %f, X: %f, Y: %f, Z: %f, Error: %f"), HorizontalAngle, VerticalAngle, horizontal, vertical, FMath::RadiansToDegrees(theta), FMath::RadiansToDegrees(phi), CorrectedDistance, x, y, z, newError);
                 error = newError;
-                result = point;
+                result = spherical;
             }
         }
     }
@@ -293,8 +301,9 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
         r * FMath::Sin(vCoord) * FMath::Sin(hCoord),
         r * FMath::Cos(vCoord)
     );
+    //DrawDebugPoint(GetWorld(), ParentTransform.TransformPosition(point), 5.0f, FColor::Red, false, (1/config.frequency)*1.5);
 
-    result = MathToolkit::ConvertUEToROS(result);
+    point = MathToolkit::ConvertUEToROS(point);
 
     /*FVector Axis(0.0f, 0.0f, 1.0f);
 
@@ -329,7 +338,7 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngle(
     uint32 y_offset,
     uint32 recursionDepth
 ) {
-    if(width <= 10  && height <= 10)
+    if(width <= 5  && height <= 5)
     {
         //UE_LOG(LogTemp, Warning, TEXT("Depth: %d"), recursionDepth);
         //UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f, Width: %d, Height: %d, X Offset: %d, Y Offset: %d"), horizontal, vertical, width, height, x_offset, y_offset);
@@ -351,10 +360,7 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngle(
     uint32 middleY = y_offset + height / 2;
     float depth = frameBuffer[middleY * width + middleX].R;
 
-    float HorizontalAngle =(middleX- (float)RenderWidth / 2.f)/(float)RenderWidth * (float)FOVH;
-    float VerticalAngle = -(middleY- (float)RenderHeight / 2.f)/(float)RenderHeight * (float)FOVV;
-
-    std::pair<FVector,FVector> coords = calculateSphericalFromDepth(depth, HorizontalAngle, VerticalAngle, SceneCapture->FOVAngle, SceneCapture->FOVAngle * (height / width));
+    std::pair<FVector,FVector> coords = calculateSphericalFromDepth(depth, middleX, middleY, SceneCapture->FOVAngle, RenderWidth, RenderHeight);
     FVector spherical = coords.first;
     
     float r = spherical.X;
@@ -363,29 +369,22 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngle(
 
     uint32 sectionCoords[2] = {0,0};
     
+    
     if(hCoord > FMath::DegreesToRadians(horizontal))
     {
-        //UE_LOG(LogTemp, Warning, TEXT("hCoord: %f, horizontal: %f"), hCoord, FMath::DegreesToRadians(horizontal));
-        //UE_LOG(LogTemp, Warning, TEXT("real horizontal: %f hCoord: %f, horizontal: %f Going Left"), FMath::DegreesToRadians(HorizontalAngle), hCoord, FMath::DegreesToRadians(horizontal));
         sectionCoords[0] = 0;
     }
     else
     {
-        //UE_LOG(LogTemp, Warning, TEXT("real horizontal: %f hCoord: %f, horizontal: %f Going Right"), FMath::DegreesToRadians(HorizontalAngle), hCoord, FMath::DegreesToRadians(horizontal));
-        //UE_LOG(LogTemp, Warning, TEXT("hCoord: %f, horizontal: %f"), hCoord, FMath::DegreesToRadians(horizontal));
         sectionCoords[0] = 1;
     }
 
     if(vCoord < FMath::DegreesToRadians(vertical))
     {
-        //UE_LOG(LogTemp, Warning, TEXT("real vertical: %f vCoord: %f, vertical: %f Going Up"), FMath::RadiansToDegrees(VerticalAngle), FMath::RadiansToDegrees(vCoord), vertical);
-        //UE_LOG(LogTemp, Warning, TEXT("vCoord: %f, vertical: %f"), vCoord, FMath::DegreesToRadians(vertical));
         sectionCoords[1] = 0;
     }
     else
     {
-        //UE_LOG(LogTemp, Warning, TEXT("real vertical: %f vCoord: %f, vertical: %f Going Down"), FMath::RadiansToDegrees(VerticalAngle), FMath::RadiansToDegrees(vCoord), vertical);
-        //UE_LOG(LogTemp, Warning, TEXT("vCoord: %f, vertical: %f"), vCoord, FMath::DegreesToRadians(vertical));
         sectionCoords[1] = 1;
     }
 
@@ -417,36 +416,53 @@ void UOusterDepthBufferComponent::CaptureDepth()
     {
         return;
     }
-
+                                  
     FTransform ParentTransform = ParentActor->GetActorTransform();
 
     float HorizontalAngle = 0.0f;
     float VerticalAngle = 0;
     float HorizontalAngleStep = 360.0f / config.horizontalResolution;
     float VerticalAngleStep = config.verticalFOV / config.verticalResolution;
+    float horizontalFOV = config.horizontalResolution;
+    float verticalFOV = config.verticalResolution;
+    uint32 HorizontalResolution = config.horizontalResolution;
+    uint32 VerticalResolution = config.verticalResolution;
 
     //UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle Step: %f, Vertical Angle Step: %f Horizontal Resolution: %d, Vertical Resolution: %d"), HorizontalAngleStep, VerticalAngleStep, config.horizontalResolution, config.verticalResolution);
     auto start = high_resolution_clock::now();
-    for (int32 i = 0; i < config.horizontalResolution; i++)
+
+
+   
+    // Determine the number of worker threads to use
+    int32 NumThreads = FPlatformMisc::NumberOfWorkerThreadsToSpawn();
+    if (NumThreads <= 1)
     {
-        for (int32 j = 0; j < config.verticalResolution; j++)
-        {
-            float AdjustedVerticalAngle = VerticalAngle - config.verticalFOV / 2.0f;
-
-            //
-
-            FVector point = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle);
-            //UE_LOG(LogTemp, Warning, TEXT("Front: X: %f, Y: %f, Z: %f Horizontal Angle: %f, Vertical Angle: %f"), point.X, point.Y, point.Z, HorizontalAngle, VerticalAngle);
-            PointCloud.Add(PointXYZI(point.X/100, point.Y/100, point.Z/100, 1.0f));
-
-
-            VerticalAngle += VerticalAngleStep;
-        }
-
-        HorizontalAngle += HorizontalAngleStep;
-        VerticalAngle = 0;
+        NumThreads = 1; // Fallback to single-threaded execution if only one worker thread is suggested
     }
 
+    // Calculate the chunk size for each thread
+    int32 ChunkSize = FMath::CeilToInt((float)HorizontalResolution / NumThreads);
+
+    ParallelFor(NumThreads, [this, ChunkSize, HorizontalAngleStep, VerticalAngleStep, horizontalFOV, verticalFOV, HorizontalResolution, VerticalResolution](int32 ThreadIndex)
+    {
+        int32 StartIndex = ThreadIndex * ChunkSize;
+        int32 EndIndex = FMath::Min(StartIndex + ChunkSize, (int32)HorizontalResolution);
+
+        for (int32 i = StartIndex; i < EndIndex; i++)
+        {
+            float HorizontalAngle = -horizontalFOV / 2.0f + i * HorizontalAngleStep;
+            float VerticalAngle = -verticalFOV / 2.0f;
+
+            for (int32 j = 0; j < VerticalResolution; j++)
+            {
+                float AdjustedVerticalAngle = VerticalAngle + j * VerticalAngleStep;
+
+                FVector point = this->GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle);
+
+                PointCloud.Add(PointXYZI(point.X / 100, point.Y / 100, point.Z / 100, 1.0f));
+            }
+        }
+    });
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
 
@@ -472,7 +488,7 @@ uint32 UOusterDepthBufferComponent::GenerateData(uint8 *data, uint32 size, uint3
     // FPlatformMemory::Memcpy(PointCloud.GetData(), pointCloud->data, PointCloud.Num() * sizeof(PointXYZI));
     for (int i = 0; i < PointCloud.Num(); i++)
     {
-        pointCloud->data[i] = PointCloud[i];
+        pointCloud->data[i] = PointCloud.Get(i);
     }
 
     return sizeof(PointCloud2Reduced) + pointCloud->width * pointCloud->point_step;
