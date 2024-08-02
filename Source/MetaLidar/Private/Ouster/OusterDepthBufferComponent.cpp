@@ -58,7 +58,7 @@ void UOusterDepthBufferComponent::InitializeCaptureComponent()
     if (AActor *Owner = GetOwner())
     {
         int32 singleSensorResolution = (config.horizontalResolution / 4) * 4;
-        int32 verticalResolution = singleSensorResolution * (config.verticalFOV / 90.0f)*1.5;
+        int32 verticalResolution = singleSensorResolution;//singleSensorResolution * (config.verticalFOV / 90.0f)*1.5;
         
         RenderTargetFront = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
         RenderTargetRight = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
@@ -203,6 +203,23 @@ std::pair<FVector,FVector> UOusterDepthBufferComponent::calculateSphericalFromDe
     return std::pair<FVector, FVector>(spherical, point);
 }
 
+FVector RotatePointAroundAxis(const FVector& Point, const FVector& Axis, float AngleDegrees)
+{
+    // Normalize the axis to ensure it's a unit vector
+    FVector NormalizedAxis = Axis.GetSafeNormal();
+
+    // Convert the angle from degrees to radians
+    float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
+
+    // Create a quaternion representing the rotation
+    FQuat RotationQuat = FQuat(NormalizedAxis, AngleRadians);
+
+    // Rotate the point using the quaternion
+    FVector RotatedPoint = RotationQuat.RotateVector(Point);
+
+    return RotatedPoint;
+}
+
 FVector UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
     TObjectPtr<USceneCaptureComponent2D> SceneCapture, 
     TObjectPtr<UTextureRenderTarget2D> RenderTarget, 
@@ -263,7 +280,7 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
             {
                 //UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f, Target horizontal angle %f, Target vertical angle %f, Theta (h)  %f, Phi (V) %f, Distance: %f, X: %f, Y: %f, Z: %f, Error: %f"), HorizontalAngle, VerticalAngle, horizontal, vertical, FMath::RadiansToDegrees(theta), FMath::RadiansToDegrees(phi), CorrectedDistance, x, y, z, newError);
                 error = newError;
-                result = spherical;
+                result = point;
             }
         }
     }
@@ -277,7 +294,11 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
         r * FMath::Cos(vCoord)
     );
 
-    point = MathToolkit::ConvertUEToROS(point);
+    result = MathToolkit::ConvertUEToROS(result);
+
+    /*FVector Axis(0.0f, 0.0f, 1.0f);
+
+    FVector point = RotatePointAroundAxis(result, Axis, horizontalOffset);*/
 
   /* {
         float r = FMath::Sqrt(FMath::Square(result.X) + FMath::Square(result.Y) + FMath::Square(result.Z));
@@ -404,7 +425,7 @@ void UOusterDepthBufferComponent::CaptureDepth()
     float HorizontalAngleStep = 360.0f / config.horizontalResolution;
     float VerticalAngleStep = config.verticalFOV / config.verticalResolution;
 
-    UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle Step: %f, Vertical Angle Step: %f Horizontal Resolution: %d, Vertical Resolution: %d"), HorizontalAngleStep, VerticalAngleStep, config.horizontalResolution, config.verticalResolution);
+    //UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle Step: %f, Vertical Angle Step: %f Horizontal Resolution: %d, Vertical Resolution: %d"), HorizontalAngleStep, VerticalAngleStep, config.horizontalResolution, config.verticalResolution);
     auto start = high_resolution_clock::now();
     for (int32 i = 0; i < config.horizontalResolution; i++)
     {
@@ -539,16 +560,16 @@ FVector UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents
     }
     else if (HorizontalAngle < 180.0f)
     {
-        FVector point = GetCoordinateToAngle(SceneCaptureRight, RenderTargetRight, ImageDataRight, calculationHorizontalAngle, VerticalAngle, Width, Height, 135);
+        FVector point = GetCoordinateToAngle(SceneCaptureRight, RenderTargetRight, ImageDataRight, calculationHorizontalAngle, VerticalAngle, Width, Height, -45);
         //debug line to the point
         //DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
         return point;
     }
     else if (HorizontalAngle < 270.0f)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f"), HorizontalAngle);
+        //UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f"), HorizontalAngle);
         float newHorizontalAngle = HorizontalAngle - 180;
-        FVector point = GetCoordinateToAngle(SceneCaptureBack, RenderTargetBack, ImageDataBack, calculationHorizontalAngle, VerticalAngle, Width, Height, 225);
+        FVector point = GetCoordinateToAngle(SceneCaptureBack, RenderTargetBack, ImageDataBack, calculationHorizontalAngle, VerticalAngle, Width, Height, -135);
         //debug line to the point
         //DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
         return point;
@@ -556,7 +577,7 @@ FVector UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents
     else
     {
         float newHorizontalAngle = HorizontalAngle - 270;
-        FVector point = GetCoordinateToAngle(SceneCaptureLeft, RenderTargetLeft, ImageDataLeft, calculationHorizontalAngle, VerticalAngle, Width, Height, 315);
+        FVector point = GetCoordinateToAngle(SceneCaptureLeft, RenderTargetLeft, ImageDataLeft, calculationHorizontalAngle, VerticalAngle, Width, Height, -225);
         //debug line to the point
         //DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
         return point;
