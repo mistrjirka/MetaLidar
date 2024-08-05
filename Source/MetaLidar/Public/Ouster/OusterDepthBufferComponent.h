@@ -95,6 +95,9 @@ private:
 
     std::atomic<bool> readySendingData;
 
+    std::atomic<bool> readyCapturingData;
+
+
     std::atomic<bool> captureReady;
 
     FMatrix inverseProjectionMatrix;

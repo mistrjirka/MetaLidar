@@ -33,6 +33,16 @@ public:
         return Array.IsValidIndex(Index) ? Array[Index] : T();
     }
 
+    T GetUnsafe(int32 Index) const
+    {
+        return  Array[Index];
+    }
+
+    T* GetPointerUnsafe() const
+    {
+        return (T*)Array.GetData();
+    }
+
     // Thread-safe Num
     int32 Num() const
     {
