@@ -149,7 +149,7 @@ FVector UOusterDepthBufferComponent::CalculateSphereCoordinateCached(TArray<FFlo
     return spherical;
 }
 
-FVector UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
+PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
     TObjectPtr<USceneCaptureComponent2D> SceneCapture,
     TObjectPtr<UTextureRenderTarget2D> RenderTarget,
     TArray<FFloat16Color> &frameBuffer,
@@ -211,11 +211,13 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
     float r = result.X;
     float hCoord = result.Y - FMath::DegreesToRadians(horizontalOffset);
     float vCoord = -result.Z + (PI / 2.f);
+    float intensity = 1.0f;
 
-    FVector point = FVector(
+    PointXYZI point = PointXYZI(
         r * FMath::Sin(vCoord) * FMath::Cos(hCoord),
         r * FMath::Sin(vCoord) * FMath::Sin(hCoord),
-        r * FMath::Cos(vCoord));
+        r * FMath::Cos(vCoord)+zoffset,
+    intensity);
     // DrawDebugPoint(GetWorld(), ParentTransform.TransformPosition(point), 5.0f, FColor::Red, false, (1/config.frequency)*1.5);
 
     point = MathToolkit::ConvertUEToROS(point);
@@ -223,7 +225,7 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
     return point;
 }
 
-FVector UOusterDepthBufferComponent::GetCoordinateToAngle(
+PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
     TObjectPtr<USceneCaptureComponent2D> SceneCapture,
     TObjectPtr<UTextureRenderTarget2D> RenderTarget,
     TArray<FFloat16Color> &frameBuffer,
@@ -330,10 +332,10 @@ void UOusterDepthBufferComponent::CaptureDepth()
             {
                 float AdjustedVerticalAngle = VerticalAngle - config.verticalFOV / 2.0f;
 
-                FVector point = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle);
+                PointXYZI point = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle);
                 //UE_LOG(LogTemp, Warning, TEXT("Front: X: %f, Y: %f, Z: %f Horizontal Angle: %f, Vertical Angle: %f"), point.X, point.Y, point.Z, HorizontalAngle, VerticalAngle);
                 
-                PointCloud.Add(PointXYZI(point.X / 100, point.Y / 100, point.Z / 100, 1.0f));
+                PointCloud.Add(PointXYZI(point.x / 100, point.y / 100, point.z / 100, point.intensity));
 
                 VerticalAngle += VerticalAngleStep;
             }
@@ -424,11 +426,11 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
     }
 }
 
-FVector UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle)
+PointXYZI UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle)
 {
     if (!SceneCaptureFront || !SceneCaptureRight || !SceneCaptureBack || !SceneCaptureLeft)
     {
-        return FVector(0.0f, 0.0f, 0.0f);
+        return PointXYZI(0.0f, 0.0f, 0.0f, 0.0f);
     }
 
     int32 Width = RenderTargetFront->SizeX;
@@ -441,14 +443,14 @@ FVector UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents
     if (HorizontalAngle < 90)
     {
 
-        FVector point = GetCoordinateToAngle(SceneCaptureFront, RenderTargetFront, ImageDataFront, PointCacheFront, calculationHorizontalAngle, VerticalAngle, Width, Height, 135);
+        PointXYZI point = GetCoordinateToAngle(SceneCaptureFront, RenderTargetFront, ImageDataFront, PointCacheFront, calculationHorizontalAngle, VerticalAngle, Width, Height, 135);
         // debug line to the point
         // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
         return point;
     }
     else if (HorizontalAngle < 180.0f)
     {
-        FVector point = GetCoordinateToAngle(SceneCaptureRight, RenderTargetRight, ImageDataRight, PointCacheRight, calculationHorizontalAngle, VerticalAngle, Width, Height, 45);
+        PointXYZI point = GetCoordinateToAngle(SceneCaptureRight, RenderTargetRight, ImageDataRight, PointCacheRight, calculationHorizontalAngle, VerticalAngle, Width, Height, 45);
         // debug line to the point
         // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
         return point;
@@ -456,20 +458,20 @@ FVector UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents
     else if (HorizontalAngle < 270.0f)
     {
         // UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f"), HorizontalAngle);
-        FVector point = GetCoordinateToAngle(SceneCaptureBack, RenderTargetBack, ImageDataBack, PointCacheBack, calculationHorizontalAngle, VerticalAngle, Width, Height, 315);
+        PointXYZI point = GetCoordinateToAngle(SceneCaptureBack, RenderTargetBack, ImageDataBack, PointCacheBack, calculationHorizontalAngle, VerticalAngle, Width, Height, 315);
         // debug line to the point
         // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
         return point;
     }
     else
     {
-        FVector point = GetCoordinateToAngle(SceneCaptureLeft, RenderTargetLeft, ImageDataLeft, PointCacheLeft, calculationHorizontalAngle, VerticalAngle, Width, Height, 225);
+        PointXYZI point = GetCoordinateToAngle(SceneCaptureLeft, RenderTargetLeft, ImageDataLeft, PointCacheLeft, calculationHorizontalAngle, VerticalAngle, Width, Height, 225);
         // debug line to the point
         // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
         return point;
     }
 
-    return FVector(0.0f, 0.0f, 0.0f);
+    return PointXYZI(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 float UOusterDepthBufferComponent::GetPixelFromAngle(TObjectPtr<USceneCaptureComponent2D> SceneCapture, TObjectPtr<UTextureRenderTarget2D> RenderTarget, TArray<FFloat16Color> &frameBuffer, float HorizontalAngle, float VerticalAngle)
@@ -522,13 +524,6 @@ TObjectPtr<USceneCaptureComponent2D> UOusterDepthBufferComponent::CreateSceneCap
         SceneCaptureComponent->SetRelativeRotation(RelativeRotation);
         SceneCaptureComponent->bCaptureEveryFrame = false; // Capture on demand
         SceneCaptureComponent->bCaptureOnMovement = false;
-
-        // Store the original projection matrix
-        /*FMatrix ProjectionMatrix;
-        const float ClippingPlane = (SceneCaptureComponent->bOverride_CustomNearClippingPlane) ? SceneCaptureComponent->CustomNearClippingPlane : GNearClippingPlane;
-        BuildProjectionMatrix(FIntPoint(RenderTarget->SizeX, RenderTarget->SizeY), FOV, ClippingPlane, ProjectionMatrix);
-        SceneCaptureComponent->CustomProjectionMatrix = ProjectionMatrix;
-        SceneCaptureComponent->bUseCustomProjectionMatrix = true;*/
 
         return SceneCaptureComponent;
     }

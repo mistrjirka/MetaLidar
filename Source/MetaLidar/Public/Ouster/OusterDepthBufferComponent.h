@@ -134,7 +134,7 @@ private:
 
     void CaptureScene();
 
-    FVector GetCoordinateToAngleAccurate(
+    PointXYZI GetCoordinateToAngleAccurate(
         TObjectPtr<USceneCaptureComponent2D> SceneCapture,
         TObjectPtr<UTextureRenderTarget2D> RenderTarget,
         TArray<FFloat16Color> &frameBuffer,
@@ -147,7 +147,7 @@ private:
         uint32 x_offset = 0,
         uint32 y_offset = 0);
 
-    FVector GetCoordinateToAngle(
+    PointXYZI GetCoordinateToAngle(
         TObjectPtr<USceneCaptureComponent2D> SceneCapture,
         TObjectPtr<UTextureRenderTarget2D> RenderTarget,
         TArray<FFloat16Color> &frameBuffer,
@@ -165,7 +165,7 @@ private:
 
     void UpdateBuffer(TObjectPtr<UTextureRenderTarget2D>, TArray<FFloat16Color> &);
 
-    FVector GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle);
+    PointXYZI GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle);
 
     void GenerateDataPacket(uint64 timestamp);
 
