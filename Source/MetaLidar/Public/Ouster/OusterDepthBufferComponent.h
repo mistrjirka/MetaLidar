@@ -36,13 +36,13 @@ public:
     uint32 RowStep;
 };
 
-struct Vector3Fast
+typedef struct Vector3Fast
 {
     uint32 validity;
-    float x;
-    float y;
-    float z;
-};
+    float r;
+    float horizontalAngle;
+    float verticalAngle;
+} Vector3Fast;
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class METALIDAR_API UOusterDepthBufferComponent : public UActorComponent
@@ -79,19 +79,22 @@ private:
     TObjectPtr<UTextureRenderTarget2D> RenderTargetLeft;
 
     TArray<FFloat16Color> ImageDataFront;
+
     TArray<Vector3Fast> PointCacheFront;
 
     TArray<FFloat16Color> ImageDataRight;
+
     TArray<Vector3Fast> PointCacheRight;
 
     TArray<FFloat16Color> ImageDataBack;
+
     TArray<Vector3Fast> PointCacheBack;
 
     TArray<FFloat16Color> ImageDataLeft;
+
     TArray<Vector3Fast> PointCacheLeft;
 
     uint64 ValidityTime;
-
 
     UPROPERTY()
     float frequncyDelta;
@@ -111,7 +114,6 @@ private:
 
     std::atomic<bool> readyCapturingData;
 
-
     std::atomic<bool> captureReady;
 
     FMatrix inverseProjectionMatrix;
@@ -119,6 +121,10 @@ private:
     FMatrix projectionMatrix;
 
     TThreadSafeArray<PointXYZI> PointCloud;
+
+    FVector CalculateSphereCoordinateCached(TArray<FFloat16Color> &frameBuffer,
+                                            TArray<Vector3Fast> &PointCache,
+                                            uint32 x, uint32 y, uint32 width, uint32 height, float FOVH);
 
     std::unique_ptr<SharedMemory> shared_memory;
 
@@ -128,47 +134,36 @@ private:
 
     void CaptureScene();
 
-    std::pair<FVector,FVector> calculateSphericalFromDepth(
-        float distance, 
-        float x, 
-        float y, 
-        float FOVH, 
-        uint32 width,
-        uint32 height
-    );
-
     FVector GetCoordinateToAngleAccurate(
-        TObjectPtr<USceneCaptureComponent2D> SceneCapture, 
-        TObjectPtr<UTextureRenderTarget2D> RenderTarget, 
+        TObjectPtr<USceneCaptureComponent2D> SceneCapture,
+        TObjectPtr<UTextureRenderTarget2D> RenderTarget,
         TArray<FFloat16Color> &frameBuffer,
-        float horizontal, 
-        float vertical, 
+        TArray<Vector3Fast> &PointCache,
+        float horizontal,
+        float vertical,
         uint32 width,
         uint32 height,
         float horizontalOffset,
-        uint32 x_offset=0, 
-        uint32 y_offset=0
-    );
-
-
+        uint32 x_offset = 0,
+        uint32 y_offset = 0);
 
     FVector GetCoordinateToAngle(
-        TObjectPtr<USceneCaptureComponent2D> SceneCapture, 
-        TObjectPtr<UTextureRenderTarget2D> RenderTarget, 
+        TObjectPtr<USceneCaptureComponent2D> SceneCapture,
+        TObjectPtr<UTextureRenderTarget2D> RenderTarget,
         TArray<FFloat16Color> &frameBuffer,
-        float horizontal, 
-        float vertical, 
+        TArray<Vector3Fast> &PointCache,
+        float horizontal,
+        float vertical,
         uint32 width,
         uint32 height,
         float horizontalOffset,
-        uint32 x_offset=0, 
-        uint32 y_offset=0,
-        uint32 step=0
-    );
+        uint32 x_offset = 0,
+        uint32 y_offset = 0,
+        uint32 step = 0);
 
     float NormalizedAngle(float HorizontalAngle);
 
-    void UpdateBuffer(TObjectPtr<UTextureRenderTarget2D> , TArray<FFloat16Color> &);
+    void UpdateBuffer(TObjectPtr<UTextureRenderTarget2D>, TArray<FFloat16Color> &);
 
     FVector GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle);
 

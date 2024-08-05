@@ -3,7 +3,6 @@
 #include "CoreMinimal.h"
 #include "SharedStructure.h"
 
-
 class MathToolkit
 {
 public:
@@ -14,6 +13,15 @@ public:
     static FVector ConvertUEToROSAngleDegree(const FVector& rotation);
 
     static FRotator ConvertUEToROSAngleDegree(const FRotator& rotation);
+
+    static std::pair<FVector,FVector> CalculateSphericalFromDepth(
+        float distance, 
+        float x, 
+        float y, 
+        float FOVH, 
+        uint32 width,
+        uint32 height
+    );
     
     template <typename T, size_t S>
     static void calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector &vector_fit_a, FVector &vector_fit_b, bool print = false);
