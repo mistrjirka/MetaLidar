@@ -72,10 +72,10 @@ void UOusterDepthBufferComponent::InitializeCaptureComponent()
         PointCacheBack.Init(point, singleSensorResolution * verticalResolution);
         PointCacheLeft.Init(point, singleSensorResolution * verticalResolution);
 
-        SceneCaptureFront = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 45.0f, 0.0f), RenderTargetFront, 100.0f);
-        SceneCaptureRight = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 135.0f, 0.0f), RenderTargetRight, 100.0f);
-        SceneCaptureBack = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 225.0f, 0.0f), RenderTargetBack, 100.0f);
-        SceneCaptureLeft = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 315.0f, 0.0f), RenderTargetLeft, 100.0f);
+        SceneCaptureFront = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 45.0f, 0.0f), RenderTargetFront, 92.0f);
+        SceneCaptureRight = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 135.0f, 0.0f), RenderTargetRight, 92.0f);
+        SceneCaptureBack = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 225.0f, 0.0f), RenderTargetBack, 92.0f);
+        SceneCaptureLeft = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 315.0f, 0.0f), RenderTargetLeft, 92.0f);
     }
 }
 
@@ -237,7 +237,7 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngle(
     uint32 y_offset,
     uint32 recursionDepth)
 {
-    if (width <= 8 && height <= 8)
+    if (width <= 10 && height <= 10)
     {
         // UE_LOG(LogTemp, Warning, TEXT("Depth: %d"), recursionDepth);
         // UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f, Width: %d, Height: %d, X Offset: %d, Y Offset: %d"), horizontal, vertical, width, height, x_offset, y_offset);
@@ -266,8 +266,8 @@ FVector UOusterDepthBufferComponent::GetCoordinateToAngle(
     sectionCoords[0] = hCoord <= FMath::DegreesToRadians(horizontal);
     sectionCoords[1] = vCoord >= FMath::DegreesToRadians(vertical);
 
-    uint32 widthMargin = width / 10;
-    uint32 heightMargin = height / 10;
+    uint32 widthMargin = width / 8;
+    uint32 heightMargin = height / 8;
 
     uint32 x_offset_new = x_offset + sectionCoords[0] * (width / 2 - widthMargin);
     uint32 y_offset_new = y_offset + sectionCoords[1] * (height / 2 - heightMargin);
