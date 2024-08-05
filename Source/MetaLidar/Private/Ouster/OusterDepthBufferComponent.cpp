@@ -9,8 +9,8 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
     captureReady = false;
     readySendingData.store(true);
 
-    config.horizontalResolution = 128;
-    config.verticalResolution = 64;
+    config.horizontalResolution = 1024;
+    config.verticalResolution = 128;
     config.verticalFOV = 45.0f;
     config.frequency = 10;
     config.MemoryLabel = "/t07ySQdKFH_meta_lidar";
@@ -32,10 +32,9 @@ FMatrix CalculateInverseProjectionMatrix(const FMatrix &OriginalMatrix)
 void UOusterDepthBufferComponent::BeginPlay()
 {
     Super::BeginPlay();
-    config.horizontalResolution = 2048;
+    config.horizontalResolution = 1024;
     config.verticalResolution = 128;
     UE_LOG(LogTemp, Warning, TEXT("OusterDepthBufferComponent BeginPlay"));
-    UE_LOG(LogTemp, Warning, TEXT("correction factor for 0,0 case %f"), CalculateDistanceCorrection(0, 0, 90, 90));
     UE_LOG(LogTemp, Warning, TEXT("horizontal resolution %d, vertical resolution %d, vertical fov %f, frequency %d"), config.horizontalResolution, config.verticalResolution, config.verticalFOV, config.frequency);
 
     this->shared_memory = std::make_unique<SharedMemory>(TCHAR_TO_ANSI(*config.MemoryLabel), config.MemorySize);
@@ -89,35 +88,6 @@ void UOusterDepthBufferComponent::CaptureScene()
     SceneCaptureLeft->CaptureScene();
 }
 
-float UOusterDepthBufferComponent::CalculateDistanceCorrection(float HorizontalAngle, float VerticalAngle, float FOVH, float FOVV)
-{
-    // Convert angles to radians
-    float HorizontalAngleRad = FMath::DegreesToRadians(HorizontalAngle);
-    float VerticalAngleRad = FMath::DegreesToRadians(VerticalAngle);
-
-    // Calculate FOV in radians
-    float FOVHRad = FMath::DegreesToRadians(FOVH);
-    float FOVVRad = FMath::DegreesToRadians(FOVV);
-
-    // Calculate the correction factor based on the angles
-    float CorrectionFactorH = FMath::Cos(HorizontalAngleRad) / FMath::Cos(FOVHRad / 2.0f);
-    float CorrectionFactorV = FMath::Cos(VerticalAngleRad) / FMath::Cos(FOVVRad / 2.0f);
-
-    // Combine the horizontal and vertical correction factors
-    return CorrectionFactorH * CorrectionFactorV;
-}
-
-float CalculateZAxisCompensation(float HorizontalAngle)
-{
-    // Convert the horizontal angle to radians
-    float HorizontalAngleRad = FMath::DegreesToRadians(HorizontalAngle);
-
-    // Calculate the compensation factor
-    float CompensationFactor = FMath::Cos(HorizontalAngleRad);
-
-    return CompensationFactor;
-}
-
 float centerAngleAroundNewZero(float angle)
 {
     float centeredAngle = angle;
@@ -150,26 +120,6 @@ float UOusterDepthBufferComponent::NormalizedAngle(float HorizontalAngle)
     }
     return calculationHorizontalAngle;
 }
-
-float UOusterDepthBufferComponent::AdjustVerticalAngleForCircle(float HorizontalAngle, float VerticalAngle)
-{
-    // Get the normalized horizontal angle
-
-    float nAngle = NormalizedAngle(HorizontalAngle);
-
-    // Calculate the adjustment factor
-    float AdjustmentFactor = FMath::Cos(FMath::DegreesToRadians(nAngle));
-
-    // Apply the adjustment to the vertical angle
-    float AdjustedVerticalAngle = VerticalAngle * AdjustmentFactor;
-    if ((int)HorizontalAngle % 30 == 0 && (int)VerticalAngle % 15 == 0)
-    {
-        // UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Normalized Angle: %f, Vertical Angle: %f, Adjusted Vertical Angle: %f, Factor %f"), HorizontalAngle, nAngle, VerticalAngle, AdjustedVerticalAngle, AdjustmentFactor);
-    }
-
-    return AdjustedVerticalAngle;
-}
-
 
 std::pair<FVector, FVector> UOusterDepthBufferComponent::calculateSphericalFromDepth(
     float Depth,
@@ -209,22 +159,6 @@ std::pair<FVector, FVector> UOusterDepthBufferComponent::calculateSphericalFromD
     return std::pair<FVector, FVector>(spherical, point);
 }
 
-FVector RotatePointAroundAxis(const FVector &Point, const FVector &Axis, float AngleDegrees)
-{
-    // Normalize the axis to ensure it's a unit vector
-    FVector NormalizedAxis = Axis.GetSafeNormal();
-
-    // Convert the angle from degrees to radians
-    float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
-
-    // Create a quaternion representing the rotation
-    FQuat RotationQuat = FQuat(NormalizedAxis, AngleRadians);
-
-    // Rotate the point using the quaternion
-    FVector RotatedPoint = RotationQuat.RotateVector(Point);
-
-    return RotatedPoint;
-}
 
 FVector UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
     TObjectPtr<USceneCaptureComponent2D> SceneCapture,

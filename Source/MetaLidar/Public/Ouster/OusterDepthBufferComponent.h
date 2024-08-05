@@ -36,6 +36,14 @@ public:
     uint32 RowStep;
 };
 
+struct Vector3Fast
+{
+    uint32 validity;
+    float x;
+    float y;
+    float z;
+};
+
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class METALIDAR_API UOusterDepthBufferComponent : public UActorComponent
 {
@@ -71,12 +79,18 @@ private:
     TObjectPtr<UTextureRenderTarget2D> RenderTargetLeft;
 
     TArray<FFloat16Color> ImageDataFront;
+    TArray<Vector3Fast> PointCacheFront;
 
     TArray<FFloat16Color> ImageDataRight;
+    TArray<Vector3Fast> PointCacheRight;
 
     TArray<FFloat16Color> ImageDataBack;
+    TArray<Vector3Fast> PointCacheBack;
 
     TArray<FFloat16Color> ImageDataLeft;
+    TArray<Vector3Fast> PointCacheLeft;
+
+    uint64 ValidityTime;
 
 
     UPROPERTY()
@@ -109,8 +123,6 @@ private:
     std::unique_ptr<SharedMemory> shared_memory;
 
     void InitializeCaptureComponent();
-
-    float AdjustVerticalAngleForCircle(float HorizontalAngle, float VerticalAngle);
 
     void CaptureDepth();
 
@@ -163,8 +175,6 @@ private:
     void GenerateDataPacket(uint64 timestamp);
 
     float GetPixelFromAngle(TObjectPtr<USceneCaptureComponent2D> SceneCapture, TObjectPtr<UTextureRenderTarget2D> RenderTarget, TArray<FFloat16Color> &frameBuffer, float HorizontalAngle, float VerticalAngle);
-
-    float CalculateDistanceCorrection(float HorizontalAngle, float VerticalAngle, float FOVH, float FOVV);
 
     uint32 CalculatePointStep(const TArray<PointField> &fields);
 
