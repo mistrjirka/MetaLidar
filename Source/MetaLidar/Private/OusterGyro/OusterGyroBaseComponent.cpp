@@ -6,7 +6,7 @@
 UOusterGyroBaseComponent::UOusterGyroBaseComponent()
 {
   PrimaryComponentTick.bCanEverTick = true;
-  this->Sensor.Frequency = 5;
+  this->Sensor.Frequency = 50;
   this->Sensor.SamplingRate = 5;
   this->Sensor.MemoryLabel = "/RbjJCakPup_OusterGyro";
   this->Sensor.MemorySize = (sizeof(OusterGyroData) + sizeof(MemoryPacket)) * 2;

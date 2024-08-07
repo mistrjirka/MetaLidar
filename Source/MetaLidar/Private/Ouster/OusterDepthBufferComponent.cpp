@@ -8,8 +8,7 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
     PrimaryComponentTick.bCanEverTick = true;
     captureReady = false;
     readySendingData.store(true);
-
-    config.horizontalResolution = 2048;
+    config.horizontalResolution = 1024;
     config.verticalResolution = 128;
     config.verticalFOV = 45.0f;
     config.frequency = 10;
@@ -32,6 +31,8 @@ FMatrix CalculateInverseProjectionMatrix(const FMatrix &OriginalMatrix)
 void UOusterDepthBufferComponent::BeginPlay()
 {
     Super::BeginPlay();
+    angleOffset = 0.f; //-90.0f;
+
     config.horizontalResolution = 1024;
     config.verticalResolution = 128;
     UE_LOG(LogTemp, Warning, TEXT("OusterDepthBufferComponent BeginPlay"));
@@ -58,8 +59,8 @@ void UOusterDepthBufferComponent::InitializeCaptureComponent()
 {
     if (AActor *Owner = GetOwner())
     {
-        int32 singleSensorResolution = fmax((config.horizontalResolution / 4) * 3.6, 100);
-        int32 verticalResolution = singleSensorResolution * (config.verticalFOV / 90.0f) * 2.5;
+        int32 singleSensorResolution = fmax((config.horizontalResolution / 4) * 3.5, 100);
+        int32 verticalResolution = singleSensorResolution * (config.verticalFOV / 90.0f) * 1.5;
 
         RenderTargetFront = CreateRenderTarget(singleSensorResolution, verticalResolution);
         RenderTargetRight = CreateRenderTarget(singleSensorResolution, verticalResolution);
@@ -177,6 +178,8 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
     int count = 0;
     bool run = true;
 
+    float normal = 0.0;
+
     for (uint32 i = x_offset; i < x_offset + width && run; i++)
     {
         // UE_LOG(LogTemp, Warning, TEXT("Horizontal angle: %f"), (i - (float)RenderWidth / 2.f)/(float)RenderWidth * (float)FOVH);
@@ -209,7 +212,7 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
     }
 
     float r = result.X;
-    float hCoord = result.Y - FMath::DegreesToRadians(horizontalOffset);
+    float hCoord = result.Y - FMath::DegreesToRadians(horizontalOffset+angleOffset);
     float vCoord = -result.Z + (PI / 2.f);
     float intensity = 1.0f;
 
@@ -398,13 +401,6 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
     {
 
         CaptureScene();
-        captureReady.store(true);
-        return;
-    }
-
-    if (readySendingData.load())
-    {
-        TRACE_CPUPROFILER_EVENT_SCOPE_STR("sending data")
         {
             TRACE_CPUPROFILER_EVENT_SCOPE_STR("Updating depth buffers")
             UpdateBuffer(RenderTargetFront, ImageDataFront);
@@ -412,6 +408,14 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
             UpdateBuffer(RenderTargetBack, ImageDataBack);
             UpdateBuffer(RenderTargetLeft, ImageDataLeft);
         }
+        captureReady.store(true);
+        return;
+    }
+
+    if (readySendingData.load())
+    {
+        TRACE_CPUPROFILER_EVENT_SCOPE_STR("sending data")
+
         readySendingData.store(false);
         AsyncTask(ENamedThreads::AnyThread, [this]()
                   {
@@ -524,7 +528,22 @@ TObjectPtr<USceneCaptureComponent2D> UOusterDepthBufferComponent::CreateSceneCap
         SceneCaptureComponent->SetRelativeRotation(RelativeRotation);
         SceneCaptureComponent->bCaptureEveryFrame = false; // Capture on demand
         SceneCaptureComponent->bCaptureOnMovement = false;
-
+        
+        SceneCaptureComponent->ShowFlags.SetDynamicShadows(false);
+        SceneCaptureComponent->ShowFlags.SetPostProcessing(false);
+        SceneCaptureComponent->ShowFlags.SetLighting(false);
+        //SceneCaptureComponent->ShowFlags.SetAtmosphericFog(false);
+        SceneCaptureComponent->ShowFlags.SetFog(false);
+        SceneCaptureComponent->ShowFlags.SetAntiAliasing(false);
+        SceneCaptureComponent->ShowFlags.SetAmbientOcclusion(false);
+        SceneCaptureComponent->ShowFlags.SetBloom(false);
+        SceneCaptureComponent->ShowFlags.SetTemporalAA(false);
+        SceneCaptureComponent->ShowFlags.SetTonemapper(false);
+        SceneCaptureComponent->ShowFlags.SetDepthOfField(false);
+        SceneCaptureComponent->ShowFlags.SetLensFlares(false);
+        SceneCaptureComponent->ShowFlags.SetScreenSpaceReflections(false);
+        SceneCaptureComponent->ShowFlags.SetMotionBlur(false);
+        //SceneCaptureComponent->ShowFlags.SetReflections(false);
         return SceneCaptureComponent;
     }
     return nullptr;

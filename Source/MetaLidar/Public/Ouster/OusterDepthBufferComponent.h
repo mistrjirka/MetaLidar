@@ -110,6 +110,9 @@ private:
     UPROPERTY()
     float zoffset;
 
+    UPROPERTY()
+    float angleOffset;
+
     std::atomic<bool> readySendingData;
 
     std::atomic<bool> readyCapturingData;
