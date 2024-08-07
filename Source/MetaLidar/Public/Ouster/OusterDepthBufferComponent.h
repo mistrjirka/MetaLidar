@@ -44,6 +44,14 @@ typedef struct Vector3Fast
     float verticalAngle;
 } Vector3Fast;
 
+typedef struct SensorField
+{
+    TObjectPtr<USceneCaptureComponent2D> SceneCapture;
+    TObjectPtr<UTextureRenderTarget2D> RenderTarget;
+    TArray<FFloat16Color> ImageData;
+    TArray<Vector3Fast> PointCache;
+} SensorField;
+
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class METALIDAR_API UOusterDepthBufferComponent : public UActorComponent
 {
@@ -62,37 +70,7 @@ private:
     UPROPERTY()
     FSensorConfig config;
 
-    TObjectPtr<USceneCaptureComponent2D> SceneCaptureFront;
-
-    TObjectPtr<UTextureRenderTarget2D> RenderTargetFront;
-
-    TObjectPtr<USceneCaptureComponent2D> SceneCaptureRight;
-
-    TObjectPtr<UTextureRenderTarget2D> RenderTargetRight;
-
-    TObjectPtr<USceneCaptureComponent2D> SceneCaptureBack;
-
-    TObjectPtr<UTextureRenderTarget2D> RenderTargetBack;
-
-    TObjectPtr<USceneCaptureComponent2D> SceneCaptureLeft;
-
-    TObjectPtr<UTextureRenderTarget2D> RenderTargetLeft;
-
-    TArray<FFloat16Color> ImageDataFront;
-
-    TArray<Vector3Fast> PointCacheFront;
-
-    TArray<FFloat16Color> ImageDataRight;
-
-    TArray<Vector3Fast> PointCacheRight;
-
-    TArray<FFloat16Color> ImageDataBack;
-
-    TArray<Vector3Fast> PointCacheBack;
-
-    TArray<FFloat16Color> ImageDataLeft;
-
-    TArray<Vector3Fast> PointCacheLeft;
+    TArray<SensorField> Sensors;
 
     uint64 ValidityTime;
 

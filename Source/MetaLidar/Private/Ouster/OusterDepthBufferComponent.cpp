@@ -11,7 +11,7 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
     config.horizontalResolution = 1024;
     config.verticalResolution = 128;
     config.verticalFOV = 45.0f;
-    config.frequency = 10;
+    config.frequency = 1;
     config.MemoryLabel = "/t07ySQdKFH_meta_lidar";
     config.MemorySize = 40000000;
     config.PointStep = 4 + 4 + 4 + 4;
@@ -59,24 +59,29 @@ void UOusterDepthBufferComponent::InitializeCaptureComponent()
 {
     if (AActor *Owner = GetOwner())
     {
-        int32 singleSensorResolution = fmax((config.horizontalResolution / 4) * 3.5, 100);
-        int32 verticalResolution = singleSensorResolution * (config.verticalFOV / 90.0f) * 1.5;
+        int numberSensors = 4;
+        if(fmod(360.f, config.verticalFOV) == 0)
+        {
+            numberSensors = 360 / config.verticalFOV;
+        }
+        float FOV = 360.f/numberSensors + 4;
 
-        RenderTargetFront = CreateRenderTarget(singleSensorResolution, verticalResolution);
-        RenderTargetRight = CreateRenderTarget(singleSensorResolution, verticalResolution);
-        RenderTargetBack = CreateRenderTarget(singleSensorResolution, verticalResolution);
-        RenderTargetLeft = CreateRenderTarget(singleSensorResolution, verticalResolution);
+        float realFOV = 360.0f / numberSensors;
+        int32 singleSensorResolution = fmax((config.horizontalResolution / numberSensors) * 3.5, 100);
+        UE_LOG(LogTemp, Warning, TEXT("Single sensor resolution: %d"), singleSensorResolution);
 
-        Vector3Fast point(0, 0, 0, 0);
-        PointCacheFront.Init(point, singleSensorResolution * verticalResolution);
-        PointCacheRight.Init(point, singleSensorResolution * verticalResolution);
-        PointCacheBack.Init(point, singleSensorResolution * verticalResolution);
-        PointCacheLeft.Init(point, singleSensorResolution * verticalResolution);
-
-        SceneCaptureFront = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 45.0f, 0.0f), RenderTargetFront, 92.0f);
-        SceneCaptureRight = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 135.0f, 0.0f), RenderTargetRight, 92.0f);
-        SceneCaptureBack = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 225.0f, 0.0f), RenderTargetBack, 92.0f);
-        SceneCaptureLeft = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, 315.0f, 0.0f), RenderTargetLeft, 92.0f);
+        for (int i = 0; i < numberSensors; i++)
+        {
+             UE_LOG(LogTemp, Warning, TEXT("Creating sensor %d"), i);
+            SensorField sensor;
+            sensor.RenderTarget = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
+            sensor.PointCache.Init(Vector3Fast(0, 0, 0, 0), singleSensorResolution * singleSensorResolution);
+            
+            UE_LOG(LogTemp, Warning, TEXT("Sensor rotation: %f"), i * realFOV + realFOV/2);
+            UE_LOG(LogTemp, Warning, TEXT("Sensor FOV: %f"), FOV);
+            sensor.SceneCapture = CreateSceneCaptureComponent(FVector(0.0f, 0.0f, zoffset), FRotator(0.0f, i * realFOV + realFOV/2.f, 0.0f), sensor.RenderTarget, FOV);
+            Sensors.Add(sensor);
+        }
     }
 }
 
@@ -89,11 +94,10 @@ void UOusterDepthBufferComponent::UpdateBuffer(TObjectPtr<UTextureRenderTarget2D
 void UOusterDepthBufferComponent::CaptureScene()
 {
     TRACE_CPUPROFILER_EVENT_SCOPE_STR("Depth buffer capture screen")
-
-    SceneCaptureFront->CaptureScene();
-    SceneCaptureRight->CaptureScene();
-    SceneCaptureBack->CaptureScene();
-    SceneCaptureLeft->CaptureScene();
+    for(SensorField &sensor : Sensors)
+    {
+        sensor.SceneCapture->CaptureScene();
+    }
 }
 
 float centerAngleAroundNewZero(float angle)
@@ -109,24 +113,8 @@ float centerAngleAroundNewZero(float angle)
 
 float UOusterDepthBufferComponent::NormalizedAngle(float HorizontalAngle)
 {
-    float calculationHorizontalAngle = 0;
-    if (HorizontalAngle < 45.0f || HorizontalAngle >= 315.0f)
-    {
-        calculationHorizontalAngle = centerAngleAroundNewZero(HorizontalAngle);
-    }
-    else if (HorizontalAngle < 135.0f)
-    {
-        calculationHorizontalAngle = HorizontalAngle - 90;
-    }
-    else if (HorizontalAngle < 225.0f)
-    {
-        calculationHorizontalAngle = HorizontalAngle - 180;
-    }
-    else if (HorizontalAngle < 315.0f)
-    {
-        calculationHorizontalAngle = HorizontalAngle - 270;
-    }
-    return calculationHorizontalAngle;
+    
+    return fmod(HorizontalAngle, (360.0f/ Sensors.Num())) - 360.0f / Sensors.Num() / 2;
 }
 FVector UOusterDepthBufferComponent::CalculateSphereCoordinateCached(TArray<FFloat16Color> &frameBuffer,
                                                                      TArray<Vector3Fast> &PointCache,
@@ -146,6 +134,7 @@ FVector UOusterDepthBufferComponent::CalculateSphereCoordinateCached(TArray<FFlo
         std::pair<FVector, FVector> coords = MathToolkit::CalculateSphericalFromDepth(Depth, x, y, FOVH, RenderWidth, RenderHeight);
         spherical = coords.first;
         PointCache[(y * RenderWidth) + x] = Vector3Fast(ValidityTime, spherical.X, spherical.Y, spherical.Z);
+        //UE_LOG(LogTemp, Warning, TEXT("Depth: %f, X: %d, Y: %d, Horizontal Angle: %f, Vertical Angle: %f"), Depth, x, y, FMath::RadiansToDegrees(spherical.Y), FMath::RadiansToDegrees(spherical.Z));
     }
     return spherical;
 }
@@ -193,7 +182,7 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
             r = spherical.X;
             hCoord = spherical.Y;
             vCoord = spherical.Z;
-            float newError = FMath::Abs(vCoord - FMath::DegreesToRadians(vertical)) + FMath::Abs(hCoord - FMath::DegreesToRadians(horizontal));
+            float newError = FMath::Sqrt(FMath::Square(vCoord - FMath::DegreesToRadians(vertical)) + FMath::Square(hCoord - FMath::DegreesToRadians(horizontal)));
 
             // DrawDebugString(GetWorld(), ParentTransform.TransformPosition(result), FString::Printf(TEXT("h: %f V %f \nTh: %f Tv: %f\n E: %f"), FMath::RadiansToDegrees(hCoord), FMath::RadiansToDegrees(vCoord),horizontal, vertical, newError), nullptr, FColor::Red, (1/config.frequency)*1.5, false);
             if (newError < error)
@@ -203,10 +192,6 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
                 result = spherical;
                 x_res = i;
                 y_res = j;
-            }
-            else if (i > x_res && j > y_res)
-            {
-                run = false;
             }
         }
     }
@@ -219,7 +204,7 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
     PointXYZI point = PointXYZI(
         r * FMath::Sin(vCoord) * FMath::Cos(hCoord),
         r * FMath::Sin(vCoord) * FMath::Sin(hCoord),
-        r * FMath::Cos(vCoord)+zoffset,
+        r * FMath::Cos(vCoord)-zoffset,
     intensity);
     // DrawDebugPoint(GetWorld(), ParentTransform.TransformPosition(point), 5.0f, FColor::Red, false, (1/config.frequency)*1.5);
 
@@ -242,7 +227,7 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
     uint32 y_offset,
     uint32 recursionDepth)
 {
-    if (width <= 10 && height <= 10)
+    if (width <= 12 && height <= 12)
     {
         // UE_LOG(LogTemp, Warning, TEXT("Depth: %d"), recursionDepth);
         // UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f, Width: %d, Height: %d, X Offset: %d, Y Offset: %d"), horizontal, vertical, width, height, x_offset, y_offset);
@@ -271,8 +256,8 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
     sectionCoords[0] = hCoord <= FMath::DegreesToRadians(horizontal);
     sectionCoords[1] = vCoord >= FMath::DegreesToRadians(vertical);
 
-    uint32 widthMargin = width / 8;
-    uint32 heightMargin = height / 8;
+    uint32 widthMargin = width / 5;
+    uint32 heightMargin = height / 5;
 
     uint32 x_offset_new = x_offset + sectionCoords[0] * (width / 2 - widthMargin);
     uint32 y_offset_new = y_offset + sectionCoords[1] * (height / 2 - heightMargin);
@@ -285,10 +270,6 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
 void UOusterDepthBufferComponent::CaptureDepth()
 {
     // UE_LOG(LogTemp, Warning, TEXT("CaptureDepth"));
-    if (!SceneCaptureFront || !SceneCaptureRight || !SceneCaptureBack || !SceneCaptureLeft)
-    {
-        return;
-    }
 
     AActor *ParentActor = GetOwner();
 
@@ -403,10 +384,13 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
         CaptureScene();
         {
             TRACE_CPUPROFILER_EVENT_SCOPE_STR("Updating depth buffers")
-            UpdateBuffer(RenderTargetFront, ImageDataFront);
-            UpdateBuffer(RenderTargetRight, ImageDataRight);
-            UpdateBuffer(RenderTargetBack, ImageDataBack);
-            UpdateBuffer(RenderTargetLeft, ImageDataLeft);
+
+            ParallelFor(Sensors.Num(), [&](int32 i)
+                        {
+                SensorField &sensor = Sensors[i];
+                UpdateBuffer(sensor.RenderTarget, sensor.ImageData);
+            }
+            );
         }
         captureReady.store(true);
         return;
@@ -432,79 +416,29 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
 
 PointXYZI UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle)
 {
-    if (!SceneCaptureFront || !SceneCaptureRight || !SceneCaptureBack || !SceneCaptureLeft)
-    {
-        return PointXYZI(0.0f, 0.0f, 0.0f, 0.0f);
-    }
 
-    int32 Width = RenderTargetFront->SizeX;
-    int32 Height = RenderTargetFront->SizeY;
 
-    float FOVH = SceneCaptureFront->FOVAngle;
-    float FOVV = SceneCaptureFront->FOVAngle * (Height / Width);
     float calculationHorizontalAngle = NormalizedAngle(HorizontalAngle);
 
-    if (HorizontalAngle < 90)
-    {
+    float step = 360.0f / Sensors.Num();
+    int sensorIndex = FMath::Floor(HorizontalAngle / step);
+    //UE_LOG(LogTemp, Warning, TEXT("Sensor index: %d"), sensorIndex);
+    //UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f"), HorizontalAngle, VerticalAngle);
+    //UE_LOG(LogTemp, Warning, TEXT("step %f"), step);
 
-        PointXYZI point = GetCoordinateToAngle(SceneCaptureFront, RenderTargetFront, ImageDataFront, PointCacheFront, calculationHorizontalAngle, VerticalAngle, Width, Height, 135);
-        // debug line to the point
-        // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
-        return point;
-    }
-    else if (HorizontalAngle < 180.0f)
-    {
-        PointXYZI point = GetCoordinateToAngle(SceneCaptureRight, RenderTargetRight, ImageDataRight, PointCacheRight, calculationHorizontalAngle, VerticalAngle, Width, Height, 45);
-        // debug line to the point
-        // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
-        return point;
-    }
-    else if (HorizontalAngle < 270.0f)
-    {
-        // UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f"), HorizontalAngle);
-        PointXYZI point = GetCoordinateToAngle(SceneCaptureBack, RenderTargetBack, ImageDataBack, PointCacheBack, calculationHorizontalAngle, VerticalAngle, Width, Height, 315);
-        // debug line to the point
-        // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
-        return point;
-    }
-    else
-    {
-        PointXYZI point = GetCoordinateToAngle(SceneCaptureLeft, RenderTargetLeft, ImageDataLeft, PointCacheLeft, calculationHorizontalAngle, VerticalAngle, Width, Height, 225);
-        // debug line to the point
-        // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
-        return point;
-    }
+    int32 Width = Sensors[sensorIndex].RenderTarget->SizeX;
+    int32 Height = Sensors[sensorIndex].RenderTarget->SizeY;
+    float FOVH = Sensors[sensorIndex].SceneCapture->FOVAngle;
+    float FOVV = Sensors[sensorIndex].SceneCapture->FOVAngle * (Height / Width);
+    float offset = 360 - step * sensorIndex- step/2;
+    //UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Normalized: %f Vertical Angle: %f, Sensor Index: %d, Offset: %f"), calculationHorizontalAngle, HorizontalAngle, VerticalAngle, sensorIndex, offset);
 
-    return PointXYZI(0.0f, 0.0f, 0.0f, 0.0f);
+    PointXYZI point = GetCoordinateToAngle(Sensors[sensorIndex].SceneCapture, Sensors[sensorIndex].RenderTarget, Sensors[sensorIndex].ImageData, Sensors[sensorIndex].PointCache, calculationHorizontalAngle, VerticalAngle, Width, Height, offset);
+    // debug line to the point
+    // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FColor::Red, false, 1/config.frequency, 0, 1.0f);
+    return point;
 }
 
-float UOusterDepthBufferComponent::GetPixelFromAngle(TObjectPtr<USceneCaptureComponent2D> SceneCapture, TObjectPtr<UTextureRenderTarget2D> RenderTarget, TArray<FFloat16Color> &frameBuffer, float HorizontalAngle, float VerticalAngle)
-{
-    int32 Width = RenderTarget->SizeX;
-    int32 Height = RenderTarget->SizeY;
-    float FOVH = SceneCapture->FOVAngle;
-
-    FIntPoint PixelCoords = UAngleToPixelUtility::GetPixelCoordinates(HorizontalAngle, VerticalAngle, FOVH, Width, Height);
-    FFloat16Color PixelColor;
-
-    if (frameBuffer.Num() <= Width * PixelCoords.Y + PixelCoords.X)
-    {
-        UE_LOG(LogTemp, Error, TEXT("FrameBuffer is not large enough! Coords: %d, %d, HorizontalAngle: %f, VerticalAngle: %f Size: %d"), PixelCoords.X, PixelCoords.Y, HorizontalAngle, VerticalAngle, frameBuffer.Num());
-    }
-    else
-    {
-        PixelColor = frameBuffer[PixelCoords.Y * Width + PixelCoords.X];
-    }
-
-    // Assuming the depth is stored in the red channel
-    float DepthValue = PixelColor.R;
-    // UE_LOG(LogTemp, Warning, TEXT("Depth value: %f, HorizontalAngle: %f, VerticalAngle: %f, PixelCoords: %d, %d RenderTargetSize: %d, %d"), DepthValue, HorizontalAngle, VerticalAngle, PixelCoords.X, PixelCoords.Y, Width, Height);
-    /*if(DepthValue > 1.0f)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Depth value is greater than 1.0f! Value: %f"), DepthValue);
-    }*/
-    return DepthValue;
-}
 
 TObjectPtr<UTextureRenderTarget2D> UOusterDepthBufferComponent::CreateRenderTarget(uint32 Width, uint32 Height)
 {
