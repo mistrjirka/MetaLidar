@@ -25,4 +25,11 @@ public:
     
     template <typename T, size_t S>
     static void calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector &vector_fit_a, FVector &vector_fit_b, bool print = false);
+
+    static std::pair<float, float> CalculateNDCCoordinates(
+    float alpha,
+    float beta,
+    float FOVH,
+    uint32 width,
+    uint32 height);
 };

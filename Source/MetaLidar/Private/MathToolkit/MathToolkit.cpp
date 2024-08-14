@@ -168,3 +168,34 @@ std::pair<FVector, FVector> MathToolkit::CalculateSphericalFromDepth(
 
     return std::pair<FVector, FVector>(spherical, point);
 }
+
+
+
+std::pair<float, float> MathToolkit::CalculateNDCCoordinates(
+    float beta,
+    float alpha,
+    float FOVH,
+    uint32 width,
+    uint32 height)
+{
+    float AspectRatio = static_cast<float>(height) / width;
+    float FOVHRad = FMath::DegreesToRadians(FOVH);
+    float FOVVRad = FMath::DegreesToRadians(FOVH) * AspectRatio;
+
+    float a = FMath::Tan(FOVHRad / 2.0f);
+    float b = FMath::Tan(FOVVRad / 2.0f);
+
+    float cos_alpha = FMath::Cos(alpha);
+    float sin_alpha = FMath::Sin(alpha);
+    float sin_beta = FMath::Sin(beta);
+
+    
+    // For ndc_x, you should use the appropriate formula. Assuming you need ndc_x as:
+    float ndc_x = FMath::Sqrt(-((FMath::Square(sin_alpha) * FMath::Square(sin_beta)) / (FMath::Square(a) * (-1 + FMath::Square(cos_alpha) + FMath::Square(sin_alpha) * FMath::Square(sin_beta)))));    //UE_LOG(LogTemp, Warning, TEXT("COS_alpha: %f, SIN_alpha: %f, SIN_beta: %f, a: %f, b: %f"), cos_alpha, sin_alpha, sin_beta, a, b);
+    UE_LOG(LogTemp, Warning, TEXT("NDC: %f"), ndc_x);
+
+    float x = (ndc_x + 1.0f) * width / 2.0f;
+    float y = (1.0f - 0) * height / 2.0f;
+
+    return std::pair<float, float>(x, y);
+}

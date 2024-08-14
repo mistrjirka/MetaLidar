@@ -35,7 +35,7 @@ typedef struct PointField {
 } PointField;
 
 // The PointCloud2 message structure
-typedef struct PointCloud2 {
+typedef struct  PointCloud2  {
   Header header;   // Standard ROS message header
   uint32 height; // Height of the point cloud dataset
   uint32 width;  // Width of the point cloud dataset
@@ -55,6 +55,11 @@ typedef struct PointXYZI {
   float y;
   float z;
   float intensity;
+  uint32_t t;
+  uint32_t reflectivity;
+  uint16_t ring;
+  uint16_t noise;
+  uint32_t range;
 } PointXYZI;
 
 typedef struct PointCloud2Reduced {
