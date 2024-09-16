@@ -32,4 +32,6 @@ public:
     float FOVH,
     uint32 width,
     uint32 height);
+    
+    static float calculateHorizontalFOV(float senzorWidth, float focalLength);
 };

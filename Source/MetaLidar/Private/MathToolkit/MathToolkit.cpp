@@ -199,3 +199,8 @@ std::pair<float, float> MathToolkit::CalculateNDCCoordinates(
 
     return std::pair<float, float>(x, y);
 }
+  
+float MathToolkit::calculateHorizontalFOV(float senzorWidth, float focalLength)
+{
+  return FMath::RadiansToDegrees(2.0f * FMath::Atan(senzorWidth / (2.0f * focalLength)));
+}

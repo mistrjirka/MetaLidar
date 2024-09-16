@@ -148,8 +148,6 @@ private:
 
     PointXYZI GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle);
 
-    void GenerateDataPacket(uint64 timestamp);
-
     float GetPixelFromAngle(TObjectPtr<USceneCaptureComponent2D> SceneCapture, TObjectPtr<UTextureRenderTarget2D> RenderTarget, TArray<FFloat16Color> &frameBuffer, float HorizontalAngle, float VerticalAngle);
 
     uint32 CalculatePointStep(const TArray<PointField> &fields);

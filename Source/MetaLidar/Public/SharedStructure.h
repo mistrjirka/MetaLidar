@@ -62,6 +62,15 @@ typedef struct PointXYZI {
   uint32_t range;
 } PointXYZI;
 
+typedef struct Image {
+  Time time;   // Standard ROS message header
+  uint32 height; // Height of the image
+  uint32 width;  // Width of the image
+  uint8 is_bigendian;   // Is the data big-endian
+  uint32 step;   // Full row length in bytes
+  uint32 data[];      // Actual image data, size is (step*height)
+} Image;
+
 typedef struct PointCloud2Reduced {
   Time time;   // Standard ROS message header
   uint32 height; // Height of the point cloud dataset
