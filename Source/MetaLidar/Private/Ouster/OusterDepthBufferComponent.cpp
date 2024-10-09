@@ -203,8 +203,8 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
 
     float r = result.X;
     uint32 range = FMath::RoundToInt(r);
-    float hCoord = result.Y - FMath::DegreesToRadians(horizontalOffset + angleOffset);
-    float vCoord = -result.Z + (PI / 2.f);
+    float hCoord = horizontal;//result.Y - FMath::DegreesToRadians(horizontalOffset + angleOffset);
+    float vCoord = vertical;//-result.Z + (PI / 2.f);
     float intensity = 2.0f;
     uint16_t reflectivity = 255;
 
