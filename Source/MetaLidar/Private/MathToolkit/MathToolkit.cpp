@@ -1,7 +1,7 @@
 #include "MathToolkit/MathToolkit.h"
 
 template <typename T, size_t S>
-void MathToolkit::calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector &vector_fit_a,
+void UMathToolkit::calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t size, FVector &vector_fit_a,
                                      FVector &vector_fit_b, bool print)
 {
   if (circBuffer.size() < S)
@@ -62,7 +62,7 @@ void MathToolkit::calculateLinearFit(CircularBuffer<T, S> circBuffer, size_t siz
   }
 }
 
-FVector MathToolkit::ConvertUEToROS(const FVector &UEVector)
+FVector UMathToolkit::ConvertUEToROS(const FVector &UEVector)
 {
   // Convert Unreal Engine coordinates (left-handed) to ROS coordinates (right-handed)
   FVector ROSVector;
@@ -73,7 +73,7 @@ FVector MathToolkit::ConvertUEToROS(const FVector &UEVector)
   return ROSVector;
 }
 
-FVector MathToolkit::ConvertUEToROSAngleDegree(const FVector &rotation)
+FVector UMathToolkit::ConvertUEToROSAngleDegree(const FVector &rotation)
 {
   // Convert Unreal Engine angles (left-handed) to ROS angles (right-handed)
   FVector ROSRotation;
@@ -96,7 +96,7 @@ FVector MathToolkit::ConvertUEToROSAngleDegree(const FVector &rotation)
   return ROSRotation;
 }
 
-FRotator MathToolkit::ConvertUEToROSAngleDegree(const FRotator &rotation)
+FRotator UMathToolkit::ConvertUEToROSAngleDegree(const FRotator &rotation)
 {
   // Convert Unreal Engine angles (left-handed) to ROS angles (right-handed)
   FRotator ROSRotation;
@@ -119,7 +119,7 @@ FRotator MathToolkit::ConvertUEToROSAngleDegree(const FRotator &rotation)
   return ROSRotation;
 }
 
-PointXYZI MathToolkit::ConvertUEToROS(const PointXYZI &UEPoint)
+PointXYZI UMathToolkit::ConvertUEToROS(const PointXYZI &UEPoint)
 {
   // Convert Unreal Engine coordinates (left-handed) to ROS coordinates (right-handed)
   PointXYZI ROSPoint;
@@ -131,7 +131,7 @@ PointXYZI MathToolkit::ConvertUEToROS(const PointXYZI &UEPoint)
   return ROSPoint;
 }
 
-std::pair<FVector, FVector> MathToolkit::CalculateSphericalFromDepth(
+std::pair<FVector, FVector> UMathToolkit::CalculateSphericalFromDepth(
     float Depth,
     float x,
     float y,
@@ -171,7 +171,7 @@ std::pair<FVector, FVector> MathToolkit::CalculateSphericalFromDepth(
 
 
 
-std::pair<float, float> MathToolkit::CalculateNDCCoordinates(
+std::pair<float, float> UMathToolkit::CalculateNDCCoordinates(
     float beta,
     float alpha,
     float FOVH,
@@ -200,7 +200,7 @@ std::pair<float, float> MathToolkit::CalculateNDCCoordinates(
     return std::pair<float, float>(x, y);
 }
   
-float MathToolkit::calculateHorizontalFOV(float senzorWidth, float focalLength)
+float UMathToolkit::calculateHorizontalFOV(float senzorWidth, float focalLength)
 {
   return FMath::RadiansToDegrees(2.0f * FMath::Atan(senzorWidth / (2.0f * focalLength)));
 }

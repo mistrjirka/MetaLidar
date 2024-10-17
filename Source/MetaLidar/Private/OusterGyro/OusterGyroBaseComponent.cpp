@@ -67,7 +67,7 @@ void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
   FVector ActorVelocity = GetRosVelocity();
   this->AccelerationBuffer.put(std::pair<FVector, uint32>(ActorVelocity, TimeStamp_sec));
 
-  MathToolkit::calculateLinearFit(this->AccelerationBuffer, ACCELERATION_BUFFER_SIZE, this->linear_fit_a_vel,
+  UMathToolkit::calculateLinearFit(this->AccelerationBuffer, ACCELERATION_BUFFER_SIZE, this->linear_fit_a_vel,
                            this->linear_fit_b_vel, false);
   
   FRotator ActorRotation = GetRosCurrentRotation();
@@ -77,7 +77,7 @@ void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
   ActorRotationRadians.Z = FMath::DegreesToRadians(ActorRotation.Yaw);
   //UE_LOG(LogTemp, Warning, TEXT("Rotation: %f, %f, %f"), ActorRotationRadians.X, ActorRotationRadians.Y, ActorRotationRadians.Z);
   this->RotationBuffer.put(std::pair<FVector, uint32>(ActorRotationRadians, TimeStamp_sec));
-  MathToolkit::calculateLinearFit(this->RotationBuffer, ROTATION_BUFFER_SIZE, this->linear_fit_a_rot, this->linear_fit_b_rot, false);
+  UMathToolkit::calculateLinearFit(this->RotationBuffer, ROTATION_BUFFER_SIZE, this->linear_fit_a_rot, this->linear_fit_b_rot, false);
   //check(std::isnan(this->linear_fit_a_rot[2]) == false);
 }
 
@@ -130,14 +130,14 @@ FVector UOusterGyroBaseComponent::GetRosVelocity()
   FVector ActorVelocity = this->CurrentVelocity;
   FRotator ActorRotation = this->CurrentRotation;
   ActorVelocity = ActorRotation.UnrotateVector(ActorVelocity);
-  ActorVelocity = MathToolkit::ConvertUEToROS(ActorVelocity);
+  ActorVelocity = UMathToolkit::ConvertUEToROS(ActorVelocity);
   return ActorVelocity;
 }
 
 FVector UOusterGyroBaseComponent::GetRosCurrentPosition()
 {
   FVector ActorPosition = this->Parent->GetActorLocation() - this->BeginPosition;
-  ActorPosition = MathToolkit::ConvertUEToROS(ActorPosition);
+  ActorPosition = UMathToolkit::ConvertUEToROS(ActorPosition);
   return ActorPosition;
 }
 
@@ -146,7 +146,7 @@ FRotator UOusterGyroBaseComponent::GetRosCurrentRotation()
 {
   FRotator ActorRotation = this->CurrentRotation;
 
-  ActorRotation = MathToolkit::ConvertUEToROSAngleDegree(ActorRotation);
+  ActorRotation = UMathToolkit::ConvertUEToROSAngleDegree(ActorRotation);
   ActorRotation.Yaw = ActorRotation.Yaw;
   return ActorRotation;
 }

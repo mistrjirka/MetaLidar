@@ -136,7 +136,7 @@ FVector UOusterDepthBufferComponent::CalculateSphereCoordinateCached(TArray<FFlo
         FFloat16Color color = frameBuffer[(y * RenderWidth) + x];
         float Depth = color.R;
 
-        std::pair<FVector, FVector> coords = MathToolkit::CalculateSphericalFromDepth(Depth, x, y, FOVH, RenderWidth, RenderHeight);
+        std::pair<FVector, FVector> coords = UMathToolkit::CalculateSphericalFromDepth(Depth, x, y, FOVH, RenderWidth, RenderHeight);
         spherical = coords.first;
         PointCache[(y * RenderWidth) + x] = Vector3Fast(ValidityTime, spherical.X, spherical.Y, spherical.Z);
         // UE_LOG(LogTemp, Warning, TEXT("Depth: %f, X: %d, Y: %d, Horizontal Angle: %f, Vertical Angle: %f"), Depth, x, y, FMath::RadiansToDegrees(spherical.Y), FMath::RadiansToDegrees(spherical.Z));
@@ -223,7 +223,7 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
     );
     // DrawDebugPoint(GetWorld(), ParentTransform.TransformPosition(point), 5.0f, FFloat16Color::Red, false, (1/config.frequency)*1.5);
 
-    point = MathToolkit::ConvertUEToROS(point);
+    point = UMathToolkit::ConvertUEToROS(point);
 
     return point;
 }
@@ -243,7 +243,7 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
     uint32 recursionDepth)
 {
 
-    /*std::pair<float,float> aproximateCoordinates = MathToolkit::CalculateNDCCoordinates(FMath::DegreesToRadians(horizontal), FMath::DegreesToRadians(vertical), SceneCapture->FOVAngle, RenderTarget->SizeX, RenderTarget->SizeY);
+    /*std::pair<float,float> aproximateCoordinates = UMathToolkit::CalculateNDCCoordinates(FMath::DegreesToRadians(horizontal), FMath::DegreesToRadians(vertical), SceneCapture->FOVAngle, RenderTarget->SizeX, RenderTarget->SizeY);
     int32 x = FMath::RoundToInt(aproximateCoordinates.first);
     int32 y = FMath::RoundToInt(aproximateCoordinates.second);
     UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f, Coordinates %d %d"), horizontal, vertical, x,y);
@@ -260,7 +260,7 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
         intensity);
     // DrawDebugPoint(GetWorld(), ParentTransform.TransformPosition(point), 5.0f, FFloat16Color::Red, false, (1/config.frequency)*1.5);
 
-    point = MathToolkit::ConvertUEToROS(point);
+    point = UMathToolkit::ConvertUEToROS(point);
 
     return GetCoordinateToAngleAccurate(SceneCapture, RenderTarget, frameBuffer, PointCache, horizontal, vertical, 1, height, horizontalOffset, x, 0);*/
 

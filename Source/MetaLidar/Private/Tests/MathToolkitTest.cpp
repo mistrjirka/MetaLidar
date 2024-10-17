@@ -14,7 +14,7 @@ bool MathToolkitTest             ::RunTest(const FString &Parameters)
     testBuffer.put(std::make_pair(FVector(1, 1, 1), 1));
     testBuffer.put(std::make_pair(FVector(2, 2, 2), 2));
     testBuffer.put(std::make_pair(FVector(3, 3, 3), 3));
-    MathToolkit::calculateLinearFit(testBuffer, 3, vector_fit_a, vector_fit_b);
+    UMathToolkit::calculateLinearFit(testBuffer, 3, vector_fit_a, vector_fit_b);
     //UE_LOG(LogTemp, Warning, TEXT("Resulting direction Vector a: %f, %f, %f"), vector_fit_a.X, vector_fit_a.Y, vector_fit_a.Z);
     //UE_LOG(LogTemp, Warning, TEXT("Resulting direction Vector b: %f, %f, %f"), vector_fit_b.X, vector_fit_b.Y, vector_fit_b.Z);
 
@@ -31,7 +31,7 @@ bool MathToolkitTest             ::RunTest(const FString &Parameters)
 
     testBuffer.put(std::make_pair(FVector(4, 4, 4), 4));
 
-    MathToolkit::calculateLinearFit(testBuffer, 3, vector_fit_a, vector_fit_b);
+    UMathToolkit::calculateLinearFit(testBuffer, 3, vector_fit_a, vector_fit_b);
     //UE_LOG(LogTemp, Warning, TEXT("Resulting direction Vector a: %f, %f, %f"), vector_fit_a.X, vector_fit_a.Y, vector_fit_a.Z);
     //UE_LOG(LogTemp, Warning, TEXT("Resulting direction Vector b: %f, %f, %f"), vector_fit_b.X, vector_fit_b.Y, vector_fit_b.Z);
 
@@ -50,7 +50,7 @@ bool MathToolkitTest             ::RunTest(const FString &Parameters)
     testBuffer.put(std::make_pair(FVector(0, 0, 0), 7));
     testBuffer.put(std::make_pair(FVector(0, 0, 0), 8));
 
-    MathToolkit::calculateLinearFit(testBuffer, 3, vector_fit_a, vector_fit_b);
+    UMathToolkit::calculateLinearFit(testBuffer, 3, vector_fit_a, vector_fit_b);
 
     //UE_LOG(LogTemp, Warning, TEXT("Resulting direction Vector a: %f, %f, %f"), vector_fit_a.X, vector_fit_a.Y, vector_fit_a.Z);
     //UE_LOG(LogTemp, Warning, TEXT("Resulting direction Vector b: %f, %f, %f"), vector_fit_b.X, vector_fit_b.Y, vector_fit_b.Z);
@@ -69,7 +69,7 @@ bool MathToolkitTest             ::RunTest(const FString &Parameters)
     testBuffer.put(std::make_pair(FVector(-1, -1, -1), 10));
     testBuffer.put(std::make_pair(FVector(-1, -1, -1), 11));
     
-    MathToolkit::calculateLinearFit(testBuffer, 3, vector_fit_a, vector_fit_b);
+    UMathToolkit::calculateLinearFit(testBuffer, 3, vector_fit_a, vector_fit_b);
 
     //UE_LOG(LogTemp, Warning, TEXT("Resulting direction Vector a: %f, %f, %f"), vector_fit_a.X, vector_fit_a.Y, vector_fit_a.Z);
     //UE_LOG(LogTemp, Warning, TEXT("Resulting direction Vector b: %f, %f, %f"), vector_fit_b.X, vector_fit_b.Y, vector_fit_b.Z);

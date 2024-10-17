@@ -2,9 +2,14 @@
 
 #include "CoreMinimal.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "CoreMinimal.h"
+#include "AngleToPixelUtility.generated.h"
 
-class METALIDAR_API UAngleToPixelUtility
+UCLASS()
+class METALIDAR_API UAngleToPixelUtility : public UObject
 {
+GENERATED_BODY()
+
 public:
     // Convert degrees to radians
     // Calculate pixel coordinates from angles and FOV

@@ -52,7 +52,7 @@ void UROSCameraComponent::InitializeCameraComponent()
     this->SceneCapture->AttachToComponent(Owner->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
     this->SceneCapture->SetRelativeLocation(FVector(0, 0, 0));
     this->SceneCapture->SetRelativeRotation(FRotator(0, 0, 0));
-    this->SceneCapture->FOVAngle = MathToolkit::calculateHorizontalFOV(this->sensorSizeX, this->focalLength);
+    this->SceneCapture->FOVAngle = UMathToolkit::calculateHorizontalFOV(this->sensorSizeX, this->focalLength);
     this->SceneCapture->CaptureSource = ESceneCaptureSource::SCS_FinalColorLDR;
     this->SceneCapture->TextureTarget = this->RenderTarget;
     this->SceneCapture->bCaptureEveryFrame = false;

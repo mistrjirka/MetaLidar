@@ -2,9 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "SharedStructure.h"
+#include "CircularBuffer/CircularBuffer.h"
+#include "MathToolkit.generated.h"
 
-class MathToolkit
+UCLASS()
+class METALIDAR_API UMathToolkit : public UObject
 {
+    GENERATED_BODY()
 public:
     static FVector ConvertUEToROS(const FVector& UEVector);
 
