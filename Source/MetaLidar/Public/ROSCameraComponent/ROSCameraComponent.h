@@ -11,7 +11,8 @@
 #include "Components/SceneCaptureComponent2D.h"
 #include "SharedStructure.h"
 #include "Math/Color.h"
-
+#include "SharedMemory/SharedMemory.h"
+#include "MathToolkitLibrary.h"
 #include "ROSCameraComponent.generated.h"
 #define SHARED_MEMORY_NAME_CAMERA "MetaLidarCamera5465AS6"
 

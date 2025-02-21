@@ -18,6 +18,7 @@
 #include "SharedMemory/SharedMemory.h"
 #include "Math/Float16Color.h"
 #include "ThreadSafeArray/TThreadSafeArray.h"
+#include "MathToolkitLibrary.h"
 
 #include "OusterDepthBufferComponent.generated.h"
 
