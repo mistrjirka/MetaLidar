@@ -61,30 +61,32 @@ void UOusterGyroBaseComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
 {
-
   SnapshotCurrentData();
   uint32 TimeStamp_sec = TimeStamp / 10e6;
   FVector ActorVelocity = GetRosVelocity();
-  this->AccelerationBuffer.put(std::pair<FVector, uint32>(ActorVelocity, TimeStamp_sec));
+  
+  uint32 nextIndex = AccelerationBuffer.GetNextIndex(0);
+  AccelerationBuffer[nextIndex] = TPair<FVector, uint32>(ActorVelocity, TimeStamp_sec);
 
-  UMathToolkit::calculateLinearFit(this->AccelerationBuffer, ACCELERATION_BUFFER_SIZE, this->linear_fit_a_vel,
-                           this->linear_fit_b_vel, false);
+  MathToolkitLibrary::calculateLinearFit(AccelerationBuffer, linear_fit_a_vel, linear_fit_b_vel, false);
   
   FRotator ActorRotation = GetRosCurrentRotation();
-  FVector ActorRotationRadians;
-  ActorRotationRadians.X = FMath::DegreesToRadians(ActorRotation.Roll);
-  ActorRotationRadians.Y = FMath::DegreesToRadians(ActorRotation.Pitch);
-  ActorRotationRadians.Z = FMath::DegreesToRadians(ActorRotation.Yaw);
-  //UE_LOG(LogTemp, Warning, TEXT("Rotation: %f, %f, %f"), ActorRotationRadians.X, ActorRotationRadians.Y, ActorRotationRadians.Z);
-  this->RotationBuffer.put(std::pair<FVector, uint32>(ActorRotationRadians, TimeStamp_sec));
-  UMathToolkit::calculateLinearFit(this->RotationBuffer, ROTATION_BUFFER_SIZE, this->linear_fit_a_rot, this->linear_fit_b_rot, false);
-  //check(std::isnan(this->linear_fit_a_rot[2]) == false);
+  FVector ActorRotationRadians(
+      FMath::DegreesToRadians(ActorRotation.Roll),
+      FMath::DegreesToRadians(ActorRotation.Pitch),
+      FMath::DegreesToRadians(ActorRotation.Yaw)
+  );
+
+  nextIndex = RotationBuffer.GetNextIndex(0);
+  RotationBuffer[nextIndex] = TPair<FVector, uint32>(ActorRotationRadians, TimeStamp_sec);
+  
+  MathToolkitLibrary::calculateLinearFit(RotationBuffer, linear_fit_a_rot, linear_fit_b_rot, false);
 }
 
 bool UOusterGyroBaseComponent::ReadyToProcess()
 {
-  return this->AccelerationBuffer.size() >= ACCELERATION_BUFFER_SIZE &&
-         this->RotationBuffer.size() >= ROTATION_BUFFER_SIZE;
+  return AccelerationBuffer.Capacity() == ACCELERATION_BUFFER_SIZE &&
+         RotationBuffer.Capacity() == ROTATION_BUFFER_SIZE;
 }
 
 FVector UOusterGyroBaseComponent::getExtrapolatedVelocity(double time)
@@ -130,14 +132,16 @@ FVector UOusterGyroBaseComponent::GetRosVelocity()
   FVector ActorVelocity = this->CurrentVelocity;
   FRotator ActorRotation = this->CurrentRotation;
   ActorVelocity = ActorRotation.UnrotateVector(ActorVelocity);
-  ActorVelocity = UMathToolkit::ConvertUEToROS(ActorVelocity);
+  ActorVelocity = MathToolkitLibrary::ConvertUEToROS(ActorVelocity);
   return ActorVelocity;
 }
 
 FVector UOusterGyroBaseComponent::GetRosCurrentPosition()
 {
   FVector ActorPosition = this->Parent->GetActorLocation() - this->BeginPosition;
-  ActorPosition = UMathToolkit::ConvertUEToROS(ActorPosition);
+  FRotator rotation = FRotator(this->BeginRotation.Pitch, this->BeginRotation.Yaw - 90.0, this->BeginRotation.Roll);
+  FVector UnrotatedPosition = rotation.UnrotateVector(ActorPosition);
+  ActorPosition = MathToolkitLibrary::ConvertUEToROS(UnrotatedPosition);
   return ActorPosition;
 }
 
@@ -146,7 +150,7 @@ FRotator UOusterGyroBaseComponent::GetRosCurrentRotation()
 {
   FRotator ActorRotation = this->CurrentRotation;
 
-  ActorRotation = UMathToolkit::ConvertUEToROSAngleDegree(ActorRotation);
+  ActorRotation = MathToolkitLibrary::ConvertUEToROSAngleDegree(ActorRotation);
   ActorRotation.Yaw = ActorRotation.Yaw;
   return ActorRotation;
 }
@@ -170,6 +174,8 @@ bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
     {
       this->BeginPosition = this->Parent->GetActorLocation();
       this->BeginRotation = this->Parent->GetActorRotation();
+      UE_LOG(LogTemp, Warning, TEXT("BeginPosition: %f, %f, %f"), this->BeginPosition.X, this->BeginPosition.Y, this->BeginPosition.Z);
+      UE_LOG(LogTemp, Warning, TEXT("BeginRotation: %f, %f, %f"), this->Parent->GetActorRotation().Pitch, this->Parent->GetActorRotation().Yaw, this->Parent->GetActorRotation().Roll);
       ready = true;
     }
 

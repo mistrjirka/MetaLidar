@@ -151,7 +151,7 @@ private:
     float GetPixelFromAngle(TObjectPtr<USceneCaptureComponent2D> SceneCapture, TObjectPtr<UTextureRenderTarget2D> RenderTarget, TArray<FFloat16Color> &frameBuffer, float HorizontalAngle, float VerticalAngle);
 
     uint32 CalculatePointStep(const TArray<PointField> &fields);
-
+    int32 SensorUpdateIndex;
     uint32 GenerateData(uint8 *data, uint32 size, uint32 timestamp);
 
     void GenerateDataPacket(uint32 TimeStamp);

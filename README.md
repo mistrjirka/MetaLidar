@@ -1,4 +1,4 @@
-# MetaLidar
+# Depthbuffer based lidar. WIP do not use!! if you are looking for the original metalidar look [here](https://github.com/metabotics-ai/MetaLidar)
 A plugin that simulates LiDAR sensor data built on top of Unreal Engine.
 ![MetaLidar_intro](Resources/MetaLidar_intro.gif)
 

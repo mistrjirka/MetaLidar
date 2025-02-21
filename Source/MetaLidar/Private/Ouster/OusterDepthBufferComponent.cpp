@@ -17,6 +17,7 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
     config.PointStep = sizeof(PointXYZI);
     packetSeq = 0;
     zoffset = 30.0f;
+    SensorUpdateIndex = 0;
 
     frequncyDelta = 1.f / config.frequency;
     cumulativeTime = 0.0f;
@@ -136,7 +137,7 @@ FVector UOusterDepthBufferComponent::CalculateSphereCoordinateCached(TArray<FFlo
         FFloat16Color color = frameBuffer[(y * RenderWidth) + x];
         float Depth = color.R;
 
-        std::pair<FVector, FVector> coords = UMathToolkit::CalculateSphericalFromDepth(Depth, x, y, FOVH, RenderWidth, RenderHeight);
+        std::pair<FVector, FVector> coords = MathToolkitLibrary::CalculateSphericalFromDepth(Depth, x, y, FOVH, RenderWidth, RenderHeight);
         spherical = coords.first;
         PointCache[(y * RenderWidth) + x] = Vector3Fast(ValidityTime, spherical.X, spherical.Y, spherical.Z);
         // UE_LOG(LogTemp, Warning, TEXT("Depth: %f, X: %d, Y: %d, Horizontal Angle: %f, Vertical Angle: %f"), Depth, x, y, FMath::RadiansToDegrees(spherical.Y), FMath::RadiansToDegrees(spherical.Z));
@@ -222,8 +223,11 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
         range
     );
     // DrawDebugPoint(GetWorld(), ParentTransform.TransformPosition(point), 5.0f, FFloat16Color::Red, false, (1/config.frequency)*1.5);
-
-    point = UMathToolkit::ConvertUEToROS(point);
+    FVector point_coords = FVector(point.x*100, point.y*100, point.z*100);
+    point_coords = MathToolkitLibrary::ConvertUEToROS(point_coords);
+    point.x = point_coords.X;
+    point.y = point_coords.Y;
+    point.z = point_coords.Z;
 
     return point;
 }
@@ -243,7 +247,7 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
     uint32 recursionDepth)
 {
 
-    /*std::pair<float,float> aproximateCoordinates = UMathToolkit::CalculateNDCCoordinates(FMath::DegreesToRadians(horizontal), FMath::DegreesToRadians(vertical), SceneCapture->FOVAngle, RenderTarget->SizeX, RenderTarget->SizeY);
+    /*std::pair<float,float> aproximateCoordinates = MathToolkitLibrary::CalculateNDCCoordinates(FMath::DegreesToRadians(horizontal), FMath::DegreesToRadians(vertical), SceneCapture->FOVAngle, RenderTarget->SizeX, RenderTarget->SizeY);
     int32 x = FMath::RoundToInt(aproximateCoordinates.first);
     int32 y = FMath::RoundToInt(aproximateCoordinates.second);
     UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f, Coordinates %d %d"), horizontal, vertical, x,y);
@@ -260,7 +264,7 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
         intensity);
     // DrawDebugPoint(GetWorld(), ParentTransform.TransformPosition(point), 5.0f, FFloat16Color::Red, false, (1/config.frequency)*1.5);
 
-    point = UMathToolkit::ConvertUEToROS(point);
+    point = MathToolkitLibrary::ConvertUEToROS(point);
 
     return GetCoordinateToAngleAccurate(SceneCapture, RenderTarget, frameBuffer, PointCache, horizontal, vertical, 1, height, horizontalOffset, x, 0);*/
 
@@ -418,6 +422,7 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
     cumulativeTime += DeltaTime;
 
+    // Check if it's time to capture based on your desired frequency
     if (cumulativeTime < frequncyDelta)
     {
         return;
@@ -425,35 +430,47 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
 
     if (!captureReady.load())
     {
-
+        // Capture the scene for all sensors at once
         CaptureScene();
 
-        for (SensorField &sensor : Sensors)
-        {
-            UpdateBuffer(sensor.RenderTarget, sensor.ImageData);
-        }
-
+        // Reset the sensor update index
+        SensorUpdateIndex = 0;
         captureReady.store(true);
         return;
     }
 
-    if (readySendingData.load())
+    if (captureReady.load() && SensorUpdateIndex < Sensors.Num())
     {
-        TRACE_CPUPROFILER_EVENT_SCOPE_STR("sending data")
+        // Update one sensor's buffer per frame
+        UpdateBuffer(Sensors[SensorUpdateIndex].RenderTarget, Sensors[SensorUpdateIndex].ImageData);
 
-        readySendingData.store(false);
-        AsyncTask(ENamedThreads::AnyThread, [this]()
-                  {
-            PointCloud.Reset();
-            this->CaptureDepth();
-            captureReady.store(false);   
-            this->GenerateDataPacket(this->GetTimestampMicroseconds());
-            readySendingData.store(true); 
-            ValidityTime++; });
+        // Move to the next sensor for the next frame
+        SensorUpdateIndex++;
 
-        cumulativeTime = 0.0f;
+        // Check if all sensors have been updated
+        if (SensorUpdateIndex >= Sensors.Num())
+        {
+            // All sensors updated, proceed to data processing
+            readySendingData.store(false);
+
+            AsyncTask(ENamedThreads::AnyThread, [this]()
+            {
+                PointCloud.Reset();
+                this->CaptureDepth();
+                captureReady.store(false);   
+                this->GenerateDataPacket(this->GetTimestampMicroseconds());
+                readySendingData.store(true); 
+                ValidityTime++;
+            });
+
+            // Reset the cumulative time after processing
+            cumulativeTime = 0.0f;
+        }
+
+        return;
     }
 }
+
 
 PointXYZI UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle)
 {

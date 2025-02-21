@@ -8,11 +8,11 @@
 #include "Physics/PhysicsInterfaceCore.h"
 #include "PhysicalMaterials/PhysicalMaterial.h"
 #include "SharedStructure.h"
-#include "CircularBuffer/CircularBuffer.h"
-#include "MathToolkit/MathToolkit.h"
+#include "MathToolkitLibrary.h"
 #include <array>
 #include <random>
 #include <sys/types.h>
+#include "Containers/CircularBuffer.h"
 
 #include "OusterGyroBaseComponent.generated.h"
 
@@ -92,8 +92,8 @@ public:
 private:
   uint32 LastTimeStamp;
   uint32 LastTimeSnapshotStamp;
-  CircularBuffer<std::pair<FVector, uint32>, ACCELERATION_BUFFER_SIZE> AccelerationBuffer;
-  CircularBuffer<std::pair<FVector, uint32>, ROTATION_BUFFER_SIZE> RotationBuffer;
+  TCircularBuffer<TPair<FVector, uint32>> AccelerationBuffer{ACCELERATION_BUFFER_SIZE};
+  TCircularBuffer<TPair<FVector, uint32>> RotationBuffer{ROTATION_BUFFER_SIZE};
   
   FVector linear_fit_a_vel;
   FVector linear_fit_b_vel;

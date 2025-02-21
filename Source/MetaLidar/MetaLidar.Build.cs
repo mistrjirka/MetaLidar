@@ -36,7 +36,9 @@ public class MetaLidar : ModuleRules
 				"CoreUObject",
 				"Engine",
 				"PhysicsCore",
-				"Projects"
+				"Projects",
+				"MathToolkit"  // Make sure this is here
+
 			}
 			);
 
