@@ -117,7 +117,7 @@ void AOusterGyroActor::LidarThreadTick()
   PacketTimestamp = (uint32)(1e6 * (FPlatformTime::Seconds()));
   if(GyroComponent->GenerateDataPacket(PacketTimestamp))
   {
-    UE_LOG(LogTemp, Warning, TEXT("GYRO PacketTimestamp: %d"), PacketTimestamp);
+    //UE_LOG(LogTemp, Warning, TEXT("GYRO PacketTimestamp: %d"), PacketTimestamp);
 
     TArray<uint8> packetGyro = GyroComponent->Sensor.DataPacket;
     //convert GyroComponent->OdomData to uint8 array

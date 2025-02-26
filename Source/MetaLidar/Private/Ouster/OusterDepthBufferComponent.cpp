@@ -11,7 +11,7 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
     config.horizontalResolution = 1024;
     config.verticalResolution = 128;
     config.verticalFOV = 45.0f;
-    config.frequency = 10;
+    config.frequency = 20;
     config.MemoryLabel = "/t07ySQdKFH_meta_lidar";
     config.MemorySize = 40000000;
     config.PointStep = sizeof(PointXYZI);
@@ -21,6 +21,9 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
 
     frequncyDelta = 1.f / config.frequency;
     cumulativeTime = 0.0f;
+    lastCaptureTimePoint = high_resolution_clock::now();
+    targetFPS = 40.0f; // Set the target FPS
+    isProcessing = false;
 }
 
 FMatrix CalculateInverseProjectionMatrix(const FMatrix &OriginalMatrix)
@@ -59,6 +62,9 @@ void UOusterDepthBufferComponent::BeginPlay()
     int32 NumThreads = FPlatformMisc::NumberOfWorkerThreadsToSpawn();
 
     UE_LOG(LogTemp, Warning, TEXT("Number of threads: %d"), NumThreads);
+    
+    // Initialize timing
+    lastCaptureTimePoint = high_resolution_clock::now();
 }
 
 void UOusterDepthBufferComponent::InitializeCaptureComponent()
@@ -420,11 +426,26 @@ uint32 UOusterDepthBufferComponent::GetTimestampMicroseconds()
 void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction *ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-    cumulativeTime += DeltaTime;
+    
+    // Use std::chrono for more accurate timing
+    auto currentTimePoint = high_resolution_clock::now();
+    auto elapsedTime = duration_cast<microseconds>(currentTimePoint - lastCaptureTimePoint).count() / 1000000.0f;
+    
+    cumulativeTime += elapsedTime;
+    lastCaptureTimePoint = currentTimePoint;
 
     // Check if it's time to capture based on your desired frequency
     if (cumulativeTime < frequncyDelta)
     {
+        UE_LOG(LogTemp, Warning, TEXT("Step Cumulative time: %f and frequency delta: %f"), cumulativeTime, frequncyDelta);
+        return;
+    }else{
+        UE_LOG(LogTemp, Warning, TEXT("Cumulative time: %f and frequency delta: %f"), cumulativeTime, frequncyDelta);
+    }
+
+    if (isProcessing)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Currently processing, skipping capture. Cumulative time: %f"), cumulativeTime);
         return;
     }
 
@@ -441,11 +462,18 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
 
     if (captureReady.load() && SensorUpdateIndex < Sensors.Num())
     {
-        // Update one sensor's buffer per frame
-        UpdateBuffer(Sensors[SensorUpdateIndex].RenderTarget, Sensors[SensorUpdateIndex].ImageData);
+        // Calculate the number of sensors to update this frame
+        float timePerFrame = 1.0f / targetFPS;
+        int32 sensorsToUpdate = FMath::Max(1, FMath::RoundToInt(Sensors.Num() * (frequncyDelta / timePerFrame)));
 
-        // Move to the next sensor for the next frame
-        SensorUpdateIndex++;
+        for (int32 i = 0; i < sensorsToUpdate && SensorUpdateIndex < Sensors.Num(); ++i)
+        {
+            // Update one sensor's buffer per frame
+            UpdateBuffer(Sensors[SensorUpdateIndex].RenderTarget, Sensors[SensorUpdateIndex].ImageData);
+
+            // Move to the next sensor for the next frame
+            SensorUpdateIndex++;
+        }
 
         // Check if all sensors have been updated
         if (SensorUpdateIndex >= Sensors.Num())
@@ -453,7 +481,11 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
             // All sensors updated, proceed to data processing
             readySendingData.store(false);
 
-            AsyncTask(ENamedThreads::AnyThread, [this]()
+            // Track the start time of processing
+            auto processStartTime = high_resolution_clock::now();
+            isProcessing = true; // Set processing flag
+
+            AsyncTask(ENamedThreads::AnyThread, [this, processStartTime]()
             {
                 PointCloud.Reset();
                 this->CaptureDepth();
@@ -461,6 +493,22 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
                 this->GenerateDataPacket(this->GetTimestampMicroseconds());
                 readySendingData.store(true); 
                 ValidityTime++;
+                
+                // Calculate the actual processing time
+                auto processEndTime = high_resolution_clock::now();
+                auto processDuration = duration_cast<microseconds>(processEndTime - processStartTime).count() / 1000000.0f;
+                
+                // Subtract the elapsed frequency delta, accounting for processing time
+                cumulativeTime -= frequncyDelta;
+                
+                // If processing took longer than the frequency delta, adjust accordingly
+                if (processDuration > frequncyDelta)
+                {
+                    // Reset to slightly negative to ensure next tick will trigger immediately
+                    // but still maintain proper phase for subsequent captures
+                    cumulativeTime = -(processDuration - frequncyDelta);
+                }
+                isProcessing = false; // Reset processing flag
             });
 
             // Reset the cumulative time after processing

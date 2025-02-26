@@ -162,4 +162,11 @@ private:
     TObjectPtr<UTextureRenderTarget2D> CreateRenderTarget(uint32 Width, uint32 Height);
 
     TObjectPtr<USceneCaptureComponent2D> CreateSceneCaptureComponent(FVector RelativeLocation, FRotator RelativeRotation, TObjectPtr<UTextureRenderTarget2D> RenderTarget, float FOV);
+
+    std::chrono::high_resolution_clock::time_point lastCaptureTimePoint;
+
+    UPROPERTY()
+    float targetFPS;
+
+    bool isProcessing;
 };
