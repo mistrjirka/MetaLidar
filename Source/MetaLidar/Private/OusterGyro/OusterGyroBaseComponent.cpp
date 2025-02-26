@@ -11,6 +11,7 @@ UOusterGyroBaseComponent::UOusterGyroBaseComponent()
   this->Sensor.MemoryLabel = "/RbjJCakPup_OusterGyro";
   this->Sensor.MemorySize = (sizeof(OusterGyroData) + sizeof(MemoryPacket)) * 2;
   this->PacketSeq = 0;
+  this->PushedElements = 0;
   this->LastTimeSnapshotStamp = 0;
   this->BeginPosition = FVector(0, 0, 0);
 
@@ -34,7 +35,7 @@ void UOusterGyroBaseComponent::InitializeSensor()
   }*/
 
   this->Gravity = -980.f /*CurrentWorld->GetWorldSettings(false, false)->GetGravityZ()*/;
-  AActor* myParent = this->GetAttachmentRootActor();
+  AActor *myParent = this->GetAttachmentRootActor();
   if (myParent == nullptr)
   {
     UE_LOG(LogTemp, Warning, TEXT("Parent is null!"));
@@ -49,7 +50,7 @@ void UOusterGyroBaseComponent::InitializeSensor()
 }
 
 void UOusterGyroBaseComponent::TickComponent(float DeltaTime, ELevelTick TickType,
-                                             FActorComponentTickFunction* ThisTickFunction)
+                                             FActorComponentTickFunction *ThisTickFunction)
 {
   Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
@@ -64,29 +65,32 @@ void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
   SnapshotCurrentData();
   uint32 TimeStamp_sec = TimeStamp / 10e6;
   FVector ActorVelocity = GetRosVelocity();
-  
+
   uint32 nextIndex = AccelerationBuffer.GetNextIndex(0);
   AccelerationBuffer[nextIndex] = TPair<FVector, uint32>(ActorVelocity, TimeStamp_sec);
 
   MathToolkitLibrary::calculateLinearFit(AccelerationBuffer, linear_fit_a_vel, linear_fit_b_vel, false);
-  
+
   FRotator ActorRotation = GetRosCurrentRotation();
   FVector ActorRotationRadians(
       FMath::DegreesToRadians(ActorRotation.Roll),
       FMath::DegreesToRadians(ActorRotation.Pitch),
-      FMath::DegreesToRadians(ActorRotation.Yaw)
-  );
+      FMath::DegreesToRadians(ActorRotation.Yaw));
 
   nextIndex = RotationBuffer.GetNextIndex(0);
   RotationBuffer[nextIndex] = TPair<FVector, uint32>(ActorRotationRadians, TimeStamp_sec);
-  
+  if(PushedElements < ROTATION_BUFFER_SIZE)
+  {
+    PushedElements++;
+  }
+
   MathToolkitLibrary::calculateLinearFit(RotationBuffer, linear_fit_a_rot, linear_fit_b_rot, false);
 }
 
 bool UOusterGyroBaseComponent::ReadyToProcess()
 {
-  return AccelerationBuffer.Capacity() == ACCELERATION_BUFFER_SIZE &&
-         RotationBuffer.Capacity() == ROTATION_BUFFER_SIZE;
+  return PushedElements >= ACCELERATION_BUFFER_SIZE &&
+         PushedElements >= ROTATION_BUFFER_SIZE;
 }
 
 FVector UOusterGyroBaseComponent::getExtrapolatedVelocity(double time)
@@ -95,13 +99,13 @@ FVector UOusterGyroBaseComponent::getExtrapolatedVelocity(double time)
   result.X = this->linear_fit_a_vel[0] * time + this->linear_fit_b_vel[0];
   result.Y = this->linear_fit_a_vel[1] * time + this->linear_fit_b_vel[1];
   result.Z = this->linear_fit_a_vel[2] * time + this->linear_fit_b_vel[2];
- 
+
   /*if(PacketSeq % 100 == 0)
   {
     UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters: %f, %f, %f, %f"), this->linear_fit_a_vel[0], this->linear_fit_a_vel[1], this->linear_fit_a_vel[2], time);
     UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters offset: %f, %f, %f, %f"), this->linear_fit_b_vel[0], this->linear_fit_b_vel[1], this->linear_fit_b_vel[2],time);
   }*/
-  
+
   return result;
 }
 
@@ -145,7 +149,6 @@ FVector UOusterGyroBaseComponent::GetRosCurrentPosition()
   return ActorPosition;
 }
 
-
 FRotator UOusterGyroBaseComponent::GetRosCurrentRotation()
 {
   FRotator ActorRotation = this->CurrentRotation;
@@ -158,27 +161,28 @@ FRotator UOusterGyroBaseComponent::GetRosCurrentRotation()
 bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 {
   double time = static_cast<double>(TimeStamp);
-  
-    float TimeBetween = (TimeStamp - LastTimeStamp) / 1000000.0;
-    if (TimeBetween <= 1.f / (this->Sensor.Frequency))
-    {
-      return false;
-    }
-{
+
+  float TimeBetween = (TimeStamp - LastTimeStamp) / 1000000.0;
+  if (TimeBetween <= 1.f / (this->Sensor.Frequency))
+  {
+    //UE_LOG(LogTemp, Warning, TEXT("Time between is too small! %f it should be atleast %f"), TimeBetween, 1.f / (this->Sensor.Frequency));
+    return false;
+  }
+  {
     TRACE_CPUPROFILER_EVENT_SCOPE_STR("Gyro generation")
     if (this->Parent == nullptr)
     {
-      UE_LOG(LogTemp, Warning, TEXT("Parent is null!"));
+      //UE_LOG(LogTemp, Warning, TEXT("Parent is null!"));
       return false;
-    }else if(!ready)
+    }
+    else if (!ready)
     {
       this->BeginPosition = this->Parent->GetActorLocation();
       this->BeginRotation = this->Parent->GetActorRotation();
-      UE_LOG(LogTemp, Warning, TEXT("BeginPosition: %f, %f, %f"), this->BeginPosition.X, this->BeginPosition.Y, this->BeginPosition.Z);
-      UE_LOG(LogTemp, Warning, TEXT("BeginRotation: %f, %f, %f"), this->Parent->GetActorRotation().Pitch, this->Parent->GetActorRotation().Yaw, this->Parent->GetActorRotation().Roll);
+      //UE_LOG(LogTemp, Warning, TEXT("BeginPosition: %f, %f, %f"), this->BeginPosition.X, this->BeginPosition.Y, this->BeginPosition.Z);
+      //UE_LOG(LogTemp, Warning, TEXT("BeginRotation: %f, %f, %f"), this->Parent->GetActorRotation().Pitch, this->Parent->GetActorRotation().Yaw, this->Parent->GetActorRotation().Roll);
       ready = true;
     }
-
 
     SnapshotCurrentData();
 
@@ -199,6 +203,7 @@ bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
 
     if (!ReadyToProcess())
     {
+      //UE_LOG(LogTemp, Warning, TEXT("Not ready to process!"));
       return false;
     }
     // UE_LOG(LogTemp, Warning, TEXT("Generating data packet!"));
@@ -209,9 +214,9 @@ bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
     FVector ActorLocation = GetActorLinearAccel(time);
     FVector ActorRotation = GetActorRotationSpeed(time);
     this->Sensor.DataPacket.SetNum(sizeof(OusterGyroData));
-    OusterGyroData* Data = reinterpret_cast<OusterGyroData*>(this->Sensor.DataPacket.GetData());
+    OusterGyroData *Data = reinterpret_cast<OusterGyroData *>(this->Sensor.DataPacket.GetData());
     FRotator angles = GetRosCurrentRotation();
-    //UE_LOG(LogTemp, Warning, TEXT("Yaw: %f"), angles.Yaw);
+    // UE_LOG(LogTemp, Warning, TEXT("Yaw: %f"), angles.Yaw);
     FQuat quat = FQuat(angles);
 
     Data->seq = this->PacketSeq++;
@@ -249,16 +254,15 @@ void UOusterGyroBaseComponent::GenerateOdomData(uint32 TimeStamp)
   this->Odom.stamp.nsec = time * 1000;
 
   FVector rosPosition = GetRosCurrentPosition();
-  this->Odom.pose_position.x = rosPosition.X/LENGTH_DIVIDER;
-  this->Odom.pose_position.y = rosPosition.Y/LENGTH_DIVIDER;
-  this->Odom.pose_position.z = rosPosition.Z/LENGTH_DIVIDER;
-  
+  this->Odom.pose_position.x = rosPosition.X / LENGTH_DIVIDER;
+  this->Odom.pose_position.y = rosPosition.Y / LENGTH_DIVIDER;
+  this->Odom.pose_position.z = rosPosition.Z / LENGTH_DIVIDER;
 
-  FVector ActorVelocity = GetRosVelocity()/LENGTH_DIVIDER;
+  FVector ActorVelocity = GetRosVelocity() / LENGTH_DIVIDER;
   FVector ActorAngularVelocity = this->GetActorRotationSpeed(time);
   FQuat quat = FQuat(GetRosCurrentRotation());
 
-  //UE_LOG(LogTemp, Warning, TEXT("Yaw: %f Position: %f, %f, %f"), GetRosCurrentRotation().Yaw, rosPosition.X, rosPosition.Y, rosPosition.Z);
+  // UE_LOG(LogTemp, Warning, TEXT("Yaw: %f Position: %f, %f, %f"), GetRosCurrentRotation().Yaw, rosPosition.X, rosPosition.Y, rosPosition.Z);
 
   /*if(this->PacketSeq % 100 == 0)
   {
@@ -278,14 +282,14 @@ void UOusterGyroBaseComponent::GenerateOdomData(uint32 TimeStamp)
     this->Odom.pose_covariance[i] = -1;
     this->Odom.twist_covariance[i] = -1;
   }
-/*
-  this->Odom.twist_linear.x =0;
-  this->Odom.twist_linear.y = 0;
-  this->Odom.twist_linear.z = 0;
-  this->Odom.twist_angular.x = 0;
-  this->Odom.twist_angular.y = 0;
-  this->Odom.twist_angular.z = 0;
-  /*/
+  /*
+    this->Odom.twist_linear.x =0;
+    this->Odom.twist_linear.y = 0;
+    this->Odom.twist_linear.z = 0;
+    this->Odom.twist_angular.x = 0;
+    this->Odom.twist_angular.y = 0;
+    this->Odom.twist_angular.z = 0;
+    /*/
   this->Odom.twist_linear.x = ActorVelocity.X;
   this->Odom.twist_linear.y = ActorVelocity.Y;
   this->Odom.twist_linear.z = ActorVelocity.Z;
@@ -316,10 +320,9 @@ FVector UOusterGyroBaseComponent::GetActorRotationSpeed(double time)
 {
   time = time / (double)10e6;
   FVector AngularPosPrev = this->getExtrapolatedRotation(time - (1.f / this->Sensor.Frequency));
-  
+
   FVector AngularPosNow = this->getExtrapolatedRotation(time);
-  
-  
+
   /*if(PacketSeq % 100 == 0)
   {
     UE_LOG(LogTemp, Warning, TEXT("AngularPosPrev: %f, %f, %f"), AngularPosPrev.X, AngularPosPrev.Y, AngularPosPrev.Z);

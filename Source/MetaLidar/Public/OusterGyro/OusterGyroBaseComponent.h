@@ -92,6 +92,7 @@ public:
 private:
   uint32 LastTimeStamp;
   uint32 LastTimeSnapshotStamp;
+  int32 PushedElements;
   TCircularBuffer<TPair<FVector, uint32>> AccelerationBuffer{ACCELERATION_BUFFER_SIZE};
   TCircularBuffer<TPair<FVector, uint32>> RotationBuffer{ROTATION_BUFFER_SIZE};
   
