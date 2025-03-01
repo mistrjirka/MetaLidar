@@ -24,7 +24,8 @@ public class MetaLidar : ModuleRules
 			new string[]
 			{
 				"Core",
-				"MathToolkit"
+				"MathToolkit",
+				"Engine"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

@@ -1,29 +1,29 @@
 #include "Ouster/OusterDepthBufferComponent.h"
 #include <cstring>
 #include <chrono>
+#define MAX_SENSORS 8
+#define MIN_SENSORS 3
 using namespace std::chrono;
 
 UOusterDepthBufferComponent::UOusterDepthBufferComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
-    captureReady = false;
+    captureReady.store(false);
     readySendingData.store(true);
     config.horizontalResolution = 1024;
     config.verticalResolution = 128;
     config.verticalFOV = 45.0f;
-    config.frequency = 20;
+    config.frequency = 10;
     config.MemoryLabel = "/t07ySQdKFH_meta_lidar";
     config.MemorySize = 40000000;
     config.PointStep = sizeof(PointXYZI);
     packetSeq = 0;
     zoffset = 30.0f;
-    SensorUpdateIndex = 0;
+    SensorsUpdated = 0;
 
     frequncyDelta = 1.f / config.frequency;
     cumulativeTime = 0.0f;
-    lastCaptureTimePoint = high_resolution_clock::now();
-    targetFPS = 40.0f; // Set the target FPS
-    isProcessing = false;
+    isProcessing.store(false);
 }
 
 FMatrix CalculateInverseProjectionMatrix(const FMatrix &OriginalMatrix)
@@ -62,20 +62,58 @@ void UOusterDepthBufferComponent::BeginPlay()
     int32 NumThreads = FPlatformMisc::NumberOfWorkerThreadsToSpawn();
 
     UE_LOG(LogTemp, Warning, TEXT("Number of threads: %d"), NumThreads);
-    
-    // Initialize timing
-    lastCaptureTimePoint = high_resolution_clock::now();
+
+}
+
+int UOusterDepthBufferComponent::ScheduleCaptures()
+{
+    // check if fixed framerate is enabled
+    if (!GEngine->bUseFixedFrameRate)
+    {
+        UE_LOG(LogTemp, Error, TEXT("Fixed frame rate is not enabled!"));
+        checkf(false, TEXT("Fixed frame rate must be enabled."));
+    }
+    float FixedFPS = GEngine->FixedFrameRate;
+    UE_LOG(LogTemp, Log, TEXT("Fixed frame rate is set to: %f"), FixedFPS);
+
+    // calculate number of frames for one capture
+
+    int NumberOfFramesForProcessing = FMath::Max(FMath::Floor(FixedFPS / config.frequency), 1);
+    frameIndex = NumberOfFramesForProcessing;
+    FramesAvailableForProcessing = NumberOfFramesForProcessing;
+    UE_LOG(LogTemp, Warning, TEXT("Number of frames for processing: %d"), NumberOfFramesForProcessing);
+    int NumberOfSensors = FMath::Clamp(NumberOfFramesForProcessing, MIN_SENSORS, FMath::Min(MAX_SENSORS, FMath::Floor(360 / config.verticalFOV)));
+    UE_LOG(LogTemp, Warning, TEXT("Number of sensors: %d"), NumberOfSensors);
+    int SensorsAdded = 0;
+    int SensorsPerFrame = FMath::Max(UKismetMathLibrary::FCeil(static_cast<float>(NumberOfSensors) / NumberOfFramesForProcessing), 1);
+    UE_LOG(LogTemp, Warning, TEXT("Sensors per frame: %d should be around %f"), SensorsPerFrame, static_cast<float>(NumberOfSensors) / NumberOfFramesForProcessing);
+    for (int i = 0; i < NumberOfFramesForProcessing; i++)
+    {
+        int SensorsToAdd = FMath::Min(SensorsPerFrame, NumberOfSensors - SensorsAdded);
+        ScheduledCaptures.Add(TArray<uint32>());
+        for (int j = 0; j < SensorsToAdd; j++)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Adding sensor %d to frame %d"), SensorsAdded, i);
+            ScheduledCaptures[i].Add(SensorsAdded);
+            SensorsAdded++;
+        }
+    }
+    UE_LOG(LogTemp, Warning, TEXT("Scheduled captures: %d"), ScheduledCaptures.Num());
+
+
+    return NumberOfSensors;
 }
 
 void UOusterDepthBufferComponent::InitializeCaptureComponent()
 {
     if (AActor *Owner = GetOwner())
     {
-        int numberSensors = 4;
-        if (fmod(360.f, config.verticalFOV) == 0)
-        {
-            numberSensors = 360 / config.verticalFOV;
-        }
+        int numberSensors = ScheduleCaptures();
+        // if (fmod(360.f, config.verticalFOV) == 0)
+        //{
+        //     numberSensors = 360 / config.verticalFOV;
+        // }
+
         float FOV = 360.f / numberSensors + 6;
 
         float realFOV = 360.0f / numberSensors;
@@ -215,21 +253,20 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngleAccurate(
     float intensity = 2.0f;
     uint16_t reflectivity = 255;
 
-    uint16_t ring = FMath::RoundToInt(((vertical + config.verticalFOV / 2.f) / config.verticalFOV)*config.verticalResolution);
-    //UE_LOG(LogTemp, Warning, TEXT("Ring: %d"), ring);
+    uint16_t ring = FMath::RoundToInt(((vertical + config.verticalFOV / 2.f) / config.verticalFOV) * config.verticalResolution);
+    // UE_LOG(LogTemp, Warning, TEXT("Ring: %d"), ring);
     PointXYZI point = PointXYZI(
         r * FMath::Sin(vCoord) * FMath::Cos(hCoord),
         r * FMath::Sin(vCoord) * FMath::Sin(hCoord),
         r * FMath::Cos(vCoord) - zoffset,
-        intensity, 
+        intensity,
         2,
         reflectivity,
         ring,
         0,
-        range
-    );
+        range);
     // DrawDebugPoint(GetWorld(), ParentTransform.TransformPosition(point), 5.0f, FFloat16Color::Red, false, (1/config.frequency)*1.5);
-    FVector point_coords = FVector(point.x*100, point.y*100, point.z*100);
+    FVector point_coords = FVector(point.x * 100, point.y * 100, point.z * 100);
     point_coords = MathToolkitLibrary::ConvertUEToROS(point_coords);
     point.x = point_coords.X;
     point.y = point_coords.Y;
@@ -426,99 +463,87 @@ uint32 UOusterDepthBufferComponent::GetTimestampMicroseconds()
 void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction *ThisTickFunction)
 {
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-    
-    // Use std::chrono for more accurate timing
-    auto currentTimePoint = high_resolution_clock::now();
-    auto elapsedTime = duration_cast<microseconds>(currentTimePoint - lastCaptureTimePoint).count() / 1000000.0f;
-    
-    cumulativeTime += elapsedTime;
-    lastCaptureTimePoint = currentTimePoint;
 
-    // Check if it's time to capture based on your desired frequency
-    if (cumulativeTime < frequncyDelta)
+    // Use std::chrono for more accurate timing
+
+    if (!captureReady.load() && frameIndex >= FramesAvailableForProcessing)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Step Cumulative time: %f and frequency delta: %f"), cumulativeTime, frequncyDelta);
-        return;
-    }else{
-        UE_LOG(LogTemp, Warning, TEXT("Cumulative time: %f and frequency delta: %f"), cumulativeTime, frequncyDelta);
+        // Capture the scene for all sensors at once
+        CaptureScene();
+        frameIndex = 0;
+        UE_LOG(LogTemp, Warning, TEXT("Capturing scene"));
+        SensorsUpdated = 0;
+        captureReady.store(true);
     }
 
     if (isProcessing)
     {
-        UE_LOG(LogTemp, Warning, TEXT("Currently processing, skipping capture. Cumulative time: %f"), cumulativeTime);
+        UE_LOG(LogTemp, Warning, TEXT("Processing data, skipping frame"));
         return;
     }
 
-    if (!captureReady.load())
+    if (captureReady.load() && SensorsUpdated < Sensors.Num() && frameIndex < ScheduledCaptures.Num())
     {
-        // Capture the scene for all sensors at once
-        CaptureScene();
+        UE_LOG(LogTemp, Warning, TEXT("Updating sensor buffers"));
+        TArray<uint32> sensors = ScheduledCaptures[frameIndex];
 
-        // Reset the sensor update index
-        SensorUpdateIndex = 0;
-        captureReady.store(true);
-        return;
-    }
-
-    if (captureReady.load() && SensorUpdateIndex < Sensors.Num())
-    {
-        // Calculate the number of sensors to update this frame
-        float timePerFrame = 1.0f / targetFPS;
-        int32 sensorsToUpdate = FMath::Max(1, FMath::RoundToInt(Sensors.Num() * (frequncyDelta / timePerFrame)));
-
-        for (int32 i = 0; i < sensorsToUpdate && SensorUpdateIndex < Sensors.Num(); ++i)
+        for (int i = 0; i < sensors.Num(); i++)
         {
+            UE_LOG(LogTemp, Warning, TEXT("Updating sensor %d"), sensors[i]);
             // Update one sensor's buffer per frame
-            UpdateBuffer(Sensors[SensorUpdateIndex].RenderTarget, Sensors[SensorUpdateIndex].ImageData);
-
-            // Move to the next sensor for the next frame
-            SensorUpdateIndex++;
+            UpdateBuffer(Sensors[sensors[i]].RenderTarget, Sensors[sensors[i]].ImageData);
+            SensorsUpdated++;
         }
-
-        // Check if all sensors have been updated
-        if (SensorUpdateIndex >= Sensors.Num())
+    }else {
+        UE_LOG(LogTemp, Warning, TEXT("Skipping frame"));
+        // reason for skipping frame
+        if(SensorsUpdated >= Sensors.Num())
         {
-            // All sensors updated, proceed to data processing
-            readySendingData.store(false);
-
-            // Track the start time of processing
-            auto processStartTime = high_resolution_clock::now();
-            isProcessing = true; // Set processing flag
-
-            AsyncTask(ENamedThreads::AnyThread, [this, processStartTime]()
-            {
-                PointCloud.Reset();
-                this->CaptureDepth();
-                captureReady.store(false);   
-                this->GenerateDataPacket(this->GetTimestampMicroseconds());
-                readySendingData.store(true); 
-                ValidityTime++;
-                
-                // Calculate the actual processing time
-                auto processEndTime = high_resolution_clock::now();
-                auto processDuration = duration_cast<microseconds>(processEndTime - processStartTime).count() / 1000000.0f;
-                
-                // Subtract the elapsed frequency delta, accounting for processing time
-                cumulativeTime -= frequncyDelta;
-                
-                // If processing took longer than the frequency delta, adjust accordingly
-                if (processDuration > frequncyDelta)
-                {
-                    // Reset to slightly negative to ensure next tick will trigger immediately
-                    // but still maintain proper phase for subsequent captures
-                    cumulativeTime = -(processDuration - frequncyDelta);
-                }
-                isProcessing = false; // Reset processing flag
-            });
-
-            // Reset the cumulative time after processing
-            cumulativeTime = 0.0f;
+            UE_LOG(LogTemp, Warning, TEXT("All sensors updated"));
         }
+        if(frameIndex >= ScheduledCaptures.Num())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("Frame index exceeded scheduled captures %d"), frameIndex);
+        }
+        
+    }
+    frameIndex++;
 
-        return;
+    if (SensorsUpdated >= Sensors.Num() && captureReady.load())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("All sensors updated, processing data"));
+        captureReady.store(false);
+
+        // Track the start time of processing
+        auto processStartTime = high_resolution_clock::now();
+        isProcessing.store(true); // Set processing flag
+
+        AsyncTask(ENamedThreads::AnyThread, [this, processStartTime]()
+                  {
+                      PointCloud.Reset();
+                      this->CaptureDepth();
+                      this->GenerateDataPacket(this->GetTimestampMicroseconds());
+                      readySendingData.store(true);
+                      ValidityTime++;
+
+                      // Calculate the actual processing time
+                      auto processEndTime = high_resolution_clock::now();
+                      auto processDuration = duration_cast<microseconds>(processEndTime - processStartTime).count() / 1000000.0f;
+
+                      // Subtract the elapsed frequency delta, accounting for processing time
+                      cumulativeTime -= frequncyDelta;
+
+                      // If processing took longer than the frequency delta, adjust accordingly
+                      if (processDuration > frequncyDelta)
+                      {
+                          // Reset to slightly negative to ensure next tick will trigger immediately
+                          // but still maintain proper phase for subsequent captures
+                          cumulativeTime = -(processDuration - frequncyDelta);
+                      }
+                      isProcessing.store(false); // Reset processing flag
+                  });
     }
 }
-
 
 PointXYZI UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle)
 {

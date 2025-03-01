@@ -7,6 +7,7 @@
 #include "Engine/World.h"
 #include "RenderUtils.h"
 #include "Kismet/KismetRenderingLibrary.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "ImageUtils.h"
 #include "Components/SceneCaptureComponent2D.h"
 #include "SharedStructure.h"
@@ -14,6 +15,7 @@
 #include <tuple>
 #include <pthread.h>
 #include <atomic>
+#include "Engine/Engine.h"
 #include "AngelToPixelUtility/AngleToPixelUtility.h"
 #include "SharedMemory/SharedMemory.h"
 #include "Math/Float16Color.h"
@@ -52,6 +54,13 @@ typedef struct SensorField
     TArray<FFloat16Color> ImageData;
     TArray<Vector3Fast> PointCache;
 } SensorField;
+
+enum STATE : uint8
+{
+    IDLE,
+    CAPTURING,
+    PROCESSING
+};
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class METALIDAR_API UOusterDepthBufferComponent : public UActorComponent
@@ -152,7 +161,6 @@ private:
     float GetPixelFromAngle(TObjectPtr<USceneCaptureComponent2D> SceneCapture, TObjectPtr<UTextureRenderTarget2D> RenderTarget, TArray<FFloat16Color> &frameBuffer, float HorizontalAngle, float VerticalAngle);
 
     uint32 CalculatePointStep(const TArray<PointField> &fields);
-    int32 SensorUpdateIndex;
     uint32 GenerateData(uint8 *data, uint32 size, uint32 timestamp);
 
     void GenerateDataPacket(uint32 TimeStamp);
@@ -163,10 +171,13 @@ private:
 
     TObjectPtr<USceneCaptureComponent2D> CreateSceneCaptureComponent(FVector RelativeLocation, FRotator RelativeRotation, TObjectPtr<UTextureRenderTarget2D> RenderTarget, float FOV);
 
-    std::chrono::high_resolution_clock::time_point lastCaptureTimePoint;
+    int ScheduleCaptures(); // returns the number of capture components
 
-    UPROPERTY()
-    float targetFPS;
+    TArray<TArray<uint32>> ScheduledCaptures;
 
-    bool isProcessing;
+    int32 frameIndex;
+    int32 SensorsUpdated;
+    int32 FramesAvailableForProcessing;
+
+    std::atomic<bool> isProcessing;
 };
