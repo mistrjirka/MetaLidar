@@ -51,8 +51,8 @@ typedef struct SensorField
 {
     TObjectPtr<USceneCaptureComponent2D> SceneCapture;
     TObjectPtr<UTextureRenderTarget2D> RenderTarget;
-    TArray<FFloat16Color> ImageData;
-    TArray<Vector3Fast> PointCache;
+    TArray<FFloat16Color> ImageData[2];
+    TArray<Vector3Fast> PointCache[2];
 } SensorField;
 
 enum STATE : uint8
@@ -121,7 +121,7 @@ private:
 
     void InitializeCaptureComponent();
 
-    void CaptureDepth();
+    void CaptureDepth(uint32 BufferIndex);
 
     void CaptureScene();
 
@@ -156,7 +156,7 @@ private:
 
     void UpdateBuffer(TObjectPtr<UTextureRenderTarget2D>, TArray<FFloat16Color> &);
 
-    PointXYZI GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle);
+    PointXYZI GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle, uint32 CurrentBufferIndex);
 
     float GetPixelFromAngle(TObjectPtr<USceneCaptureComponent2D> SceneCapture, TObjectPtr<UTextureRenderTarget2D> RenderTarget, TArray<FFloat16Color> &frameBuffer, float HorizontalAngle, float VerticalAngle);
 
@@ -178,6 +178,9 @@ private:
     int32 frameIndex;
     int32 SensorsUpdated;
     int32 FramesAvailableForProcessing;
+    uint32 BufferIndex;
+    
+    void SwitchBuffer();
 
     std::atomic<bool> isProcessing;
 };

@@ -17,6 +17,7 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
     config.MemoryLabel = "/t07ySQdKFH_meta_lidar";
     config.MemorySize = 40000000;
     config.PointStep = sizeof(PointXYZI);
+    BufferIndex = 0;
     packetSeq = 0;
     zoffset = 30.0f;
     SensorsUpdated = 0;
@@ -24,6 +25,11 @@ UOusterDepthBufferComponent::UOusterDepthBufferComponent()
     frequncyDelta = 1.f / config.frequency;
     cumulativeTime = 0.0f;
     isProcessing.store(false);
+}
+
+void UOusterDepthBufferComponent::SwitchBuffer()
+{
+    BufferIndex = (BufferIndex + 1) % 2;
 }
 
 FMatrix CalculateInverseProjectionMatrix(const FMatrix &OriginalMatrix)
@@ -125,7 +131,9 @@ void UOusterDepthBufferComponent::InitializeCaptureComponent()
             UE_LOG(LogTemp, Warning, TEXT("Creating sensor %d"), i);
             SensorField sensor;
             sensor.RenderTarget = CreateRenderTarget(singleSensorResolution, singleSensorResolution);
-            sensor.PointCache.Init(Vector3Fast(0, 0, 0, 0), singleSensorResolution * singleSensorResolution);
+            sensor.PointCache[0].Init(Vector3Fast(0, 0, 0, 0), singleSensorResolution * singleSensorResolution);
+
+            sensor.PointCache[1].Init(Vector3Fast(0, 0, 0, 0), singleSensorResolution * singleSensorResolution);
 
             UE_LOG(LogTemp, Warning, TEXT("Sensor rotation: %f"), i * realFOV + realFOV / 2);
             UE_LOG(LogTemp, Warning, TEXT("Sensor FOV: %f"), FOV);
@@ -351,7 +359,7 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
     return GetCoordinateToAngle(SceneCapture, RenderTarget, frameBuffer, PointCache, horizontal, vertical, width_new, height_new, horizontalOffset, x_offset_new, y_offset_new, recursionDepth);
 }
 
-void UOusterDepthBufferComponent::CaptureDepth()
+void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
 {
     // UE_LOG(LogTemp, Warning, TEXT("CaptureDepth"));
 
@@ -400,7 +408,7 @@ void UOusterDepthBufferComponent::CaptureDepth()
             {
                 float AdjustedVerticalAngle = VerticalAngle - config.verticalFOV / 2.0f;
 
-                PointXYZI point = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle);
+                PointXYZI point = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle, CurrentBufferIndex);
                 if(point.range == 0 || point.range > 65000)
                 {
                     continue;
@@ -476,40 +484,36 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
         captureReady.store(true);
     }
 
-    if (isProcessing)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("Processing data, skipping frame"));
-        return;
-    }
+   
 
     if (captureReady.load() && SensorsUpdated < Sensors.Num() && frameIndex < ScheduledCaptures.Num())
     {
-        UE_LOG(LogTemp, Warning, TEXT("Updating sensor buffers"));
+        //UE_LOG(LogTemp, Warning, TEXT("Updating sensor buffers"));
         TArray<uint32> sensors = ScheduledCaptures[frameIndex];
 
         for (int i = 0; i < sensors.Num(); i++)
         {
-            UE_LOG(LogTemp, Warning, TEXT("Updating sensor %d"), sensors[i]);
+            //UE_LOG(LogTemp, Warning, TEXT("Updating sensor %d"), sensors[i]);
             // Update one sensor's buffer per frame
-            UpdateBuffer(Sensors[sensors[i]].RenderTarget, Sensors[sensors[i]].ImageData);
+            UpdateBuffer(Sensors[sensors[i]].RenderTarget, Sensors[sensors[i]].ImageData[BufferIndex]);
             SensorsUpdated++;
         }
     }else {
-        UE_LOG(LogTemp, Warning, TEXT("Skipping frame"));
+        //UE_LOG(LogTemp, Warning, TEXT("Skipping frame"));
         // reason for skipping frame
         if(SensorsUpdated >= Sensors.Num())
         {
-            UE_LOG(LogTemp, Warning, TEXT("All sensors updated"));
+            //UE_LOG(LogTemp, Warning, TEXT("All sensors updated"));
         }
         if(frameIndex >= ScheduledCaptures.Num())
         {
-            UE_LOG(LogTemp, Warning, TEXT("Frame index exceeded scheduled captures %d"), frameIndex);
+            //UE_LOG(LogTemp, Warning, TEXT("Frame index exceeded scheduled captures %d"), frameIndex);
         }
         
     }
     frameIndex++;
 
-    if (SensorsUpdated >= Sensors.Num() && captureReady.load())
+    if (SensorsUpdated >= Sensors.Num() && captureReady.load() && !isProcessing.load())
     {
         UE_LOG(LogTemp, Warning, TEXT("All sensors updated, processing data"));
         captureReady.store(false);
@@ -517,11 +521,13 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
         // Track the start time of processing
         auto processStartTime = high_resolution_clock::now();
         isProcessing.store(true); // Set processing flag
-
-        AsyncTask(ENamedThreads::AnyThread, [this, processStartTime]()
+        uint32 CurrentBufferIndex = BufferIndex;
+        UE_LOG(LogTemp, Warning, TEXT("Current buffer index: %d"), CurrentBufferIndex);
+        SwitchBuffer();
+        AsyncTask(ENamedThreads::AnyThread, [this, processStartTime, CurrentBufferIndex]()
                   {
                       PointCloud.Reset();
-                      this->CaptureDepth();
+                      this->CaptureDepth(CurrentBufferIndex);
                       this->GenerateDataPacket(this->GetTimestampMicroseconds());
                       readySendingData.store(true);
                       ValidityTime++;
@@ -545,7 +551,7 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
     }
 }
 
-PointXYZI UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle)
+PointXYZI UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle, uint32 CurrentBufferIndex)
 {
 
     float calculationHorizontalAngle = NormalizedAngle(HorizontalAngle);
@@ -567,9 +573,10 @@ PointXYZI UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponen
     float offset = 360 - step * sensorIndex - step / 2;
     // UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Normalized: %f Vertical Angle: %f, Sensor Index: %d, Offset: %f"), calculationHorizontalAngle, HorizontalAngle, VerticalAngle, sensorIndex, offset);
 
-    PointXYZI point = GetCoordinateToAngle(Sensors[sensorIndex].SceneCapture, Sensors[sensorIndex].RenderTarget, Sensors[sensorIndex].ImageData, Sensors[sensorIndex].PointCache, calculationHorizontalAngle, VerticalAngle, Width, Height, offset);
+    PointXYZI point = GetCoordinateToAngle(Sensors[sensorIndex].SceneCapture, Sensors[sensorIndex].RenderTarget, Sensors[sensorIndex].ImageData[CurrentBufferIndex], Sensors[sensorIndex].PointCache[CurrentBufferIndex], calculationHorizontalAngle, VerticalAngle, Width, Height, offset);
     // debug line to the point
     // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FFloat16Color::Red, false, 1/config.frequency, 0, 1.0f);
+    
     return point;
 }
 
