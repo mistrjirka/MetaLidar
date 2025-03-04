@@ -303,14 +303,12 @@ FVector UOusterGyroBaseComponent::GetActorLinearAccel(double time)
 
   FVector velNow = this->getExtrapolatedVelocity(time);
 
-  velBefore = velBefore / LENGTH_DIVIDER;
-  velNow = velNow / LENGTH_DIVIDER;
-
   FVector accel = (velNow - velBefore) / (1.f / this->Sensor.Frequency);
-  accel.Z -= this->Gravity / LENGTH_DIVIDER;
+  accel.Z -= this->Gravity;
 
-  accel = GetRosCurrentRotation().RotateVector(accel);
-
+  FRotator ActorRotation = this->CurrentRotation;
+  accel = ActorRotation.UnrotateVector(accel);
+  accel = MathToolkitLibrary::ConvertUEToROS(accel);
   return accel;
 }
 
