@@ -141,7 +141,7 @@ FVector UOusterGyroBaseComponent::GetRosVelocity()
 FVector UOusterGyroBaseComponent::GetRosCurrentPosition()
 {
   FVector ActorPosition = this->Parent->GetActorLocation() - this->BeginPosition;
-  FRotator rotation = FRotator(this->BeginRotation.Pitch, this->BeginRotation.Yaw - 90.0, this->BeginRotation.Roll);
+  FRotator rotation = FRotator(this->BeginRotation.Pitch, this->BeginRotation.Yaw, this->BeginRotation.Roll);
   FVector UnrotatedPosition = rotation.UnrotateVector(ActorPosition);
   ActorPosition = MathToolkitLibrary::ConvertUEToROS(UnrotatedPosition);
   return ActorPosition;
