@@ -1,7 +1,6 @@
 #include "OusterGyro/OusterGyroBaseComponent.h"
 #include <cmath>
 
-#define LENGTH_DIVIDER 100
 
 UOusterGyroBaseComponent::UOusterGyroBaseComponent()
 {
@@ -254,11 +253,11 @@ void UOusterGyroBaseComponent::GenerateOdomData(uint32 TimeStamp)
   this->Odom.stamp.nsec = time * 1000;
 
   FVector rosPosition = GetRosCurrentPosition();
-  this->Odom.pose_position.x = rosPosition.X / LENGTH_DIVIDER;
-  this->Odom.pose_position.y = rosPosition.Y / LENGTH_DIVIDER;
-  this->Odom.pose_position.z = rosPosition.Z / LENGTH_DIVIDER;
+  this->Odom.pose_position.x = rosPosition.X;
+  this->Odom.pose_position.y = rosPosition.Y;
+  this->Odom.pose_position.z = rosPosition.Z;
 
-  FVector ActorVelocity = GetRosVelocity() / LENGTH_DIVIDER;
+  FVector ActorVelocity = GetRosVelocity();
   FVector ActorAngularVelocity = this->GetActorRotationSpeed(time);
   FQuat quat = FQuat(GetRosCurrentRotation());
 
