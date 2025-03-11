@@ -12,7 +12,7 @@
 #include <array>
 #include <random>
 #include <sys/types.h>
-#include "Containers/CircularBuffer.h"
+#include "CircularBufferMT.h"
 
 #include "OusterGyroBaseComponent.generated.h"
 
@@ -93,8 +93,11 @@ private:
   uint32 LastTimeStamp;
   uint32 LastTimeSnapshotStamp;
   int32 PushedElements;
-  TCircularBuffer<TPair<FVector, uint32>> AccelerationBuffer{ACCELERATION_BUFFER_SIZE};
-  TCircularBuffer<TPair<FVector, uint32>> RotationBuffer{ROTATION_BUFFER_SIZE};
+  using AccelBufferType = CircularBufferMT<TPair<FVector, uint32>, ACCELERATION_BUFFER_SIZE>;
+  using RotationBufferType = CircularBufferMT<TPair<FVector, uint32>, ROTATION_BUFFER_SIZE>;
+  
+  AccelBufferType AccelerationBuffer;
+  RotationBufferType RotationBuffer;
   
   FVector linear_fit_a_vel;
   FVector linear_fit_b_vel;

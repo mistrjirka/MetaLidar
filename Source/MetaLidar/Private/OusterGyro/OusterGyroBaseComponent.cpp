@@ -64,8 +64,8 @@ void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
   uint32 TimeStamp_sec = TimeStamp / 10e6;
   FVector ActorVelocity = GetRosVelocity();
 
-  uint32 nextIndex = AccelerationBuffer.GetNextIndex(0);
-  AccelerationBuffer[nextIndex] = TPair<FVector, uint32>(ActorVelocity, TimeStamp_sec);
+  // Update for new CircularBufferMT
+  AccelerationBuffer.put(TPair<FVector, uint32>(ActorVelocity, TimeStamp_sec));
 
   MathToolkitLibrary::calculateLinearFit(AccelerationBuffer, linear_fit_a_vel, linear_fit_b_vel, false);
 
@@ -75,8 +75,9 @@ void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
       FMath::DegreesToRadians(ActorRotation.Pitch),
       FMath::DegreesToRadians(ActorRotation.Yaw));
 
-  nextIndex = RotationBuffer.GetNextIndex(0);
-  RotationBuffer[nextIndex] = TPair<FVector, uint32>(ActorRotationRadians, TimeStamp_sec);
+  // Update for new CircularBufferMT
+  RotationBuffer.put(TPair<FVector, uint32>(ActorRotationRadians, TimeStamp_sec));
+
   if(PushedElements < ROTATION_BUFFER_SIZE)
   {
     PushedElements++;
@@ -114,8 +115,8 @@ FVector UOusterGyroBaseComponent::getExtrapolatedRotation(double time)
   result.Y = this->linear_fit_a_rot[1] * time + this->linear_fit_b_rot[1];
   result.Z = this->linear_fit_a_rot[2] * time + this->linear_fit_b_rot[2];
   ////check(std::isnan(this->linear_fit_a_rot[2]) == false);
-
-  /*if(PacketSeq % 100 == 0)
+/*
+  if(PacketSeq % 100 == 0)
   {
     UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters: %f, %f, %f, %f"), this->linear_fit_a_rot[0], this->linear_fit_a_rot[1], this->linear_fit_a_rot[2], time);
     UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters offset: %f, %f, %f, %f"), this->linear_fit_b_rot[0], this->linear_fit_b_rot[1], this->linear_fit_b_rot[2],time);
@@ -152,7 +153,6 @@ FRotator UOusterGyroBaseComponent::GetRosCurrentRotation()
   FRotator ActorRotation = this->CurrentRotation;
 
   ActorRotation = MathToolkitLibrary::ConvertUEToROSAngleDegree(ActorRotation);
-  ActorRotation.Yaw = ActorRotation.Yaw;
   return ActorRotation;
 }
 
