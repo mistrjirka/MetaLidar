@@ -60,30 +60,48 @@ void UOusterGyroBaseComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void UOusterGyroBaseComponent::TakeSnapshot(uint32 TimeStamp)
 {
-  SnapshotCurrentData();
-  uint32 TimeStamp_sec = TimeStamp / 10e6;
-  FVector ActorVelocity = GetRosVelocity();
+    SnapshotCurrentData();
+    
+    // Store timestamp in seconds for calculations
+    double time_sec = TimeStamp / 1000000.0;
+    
+    // Handle rotation - store in radians
+    FRotator ActorRotation = GetRosCurrentRotation();
+    FVector RotationRad(
+        FMath::DegreesToRadians(ActorRotation.Roll),
+        FMath::DegreesToRadians(ActorRotation.Pitch),
+        FMath::DegreesToRadians(ActorRotation.Yaw)
+    );
 
-  // Update for new CircularBufferMT
-  AccelerationBuffer.put(TPair<FVector, uint32>(ActorVelocity, TimeStamp_sec));
+    // Store the actual timestamp and rotation
+    RotationBuffer.put(TPair<FVector, uint32>(RotationRad, TimeStamp));
 
-  MathToolkitLibrary::calculateLinearFit(AccelerationBuffer, linear_fit_a_vel, linear_fit_b_vel, false);
+    if(PacketSeq % 100 == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Storing rotation at time %f sec (%u us): Roll=%f, Pitch=%f, Yaw=%f rad"), 
+            time_sec, TimeStamp,
+            RotationRad.X, RotationRad.Y, RotationRad.Z);
+    }
 
-  FRotator ActorRotation = GetRosCurrentRotation();
-  FVector ActorRotationRadians(
-      FMath::DegreesToRadians(ActorRotation.Roll),
-      FMath::DegreesToRadians(ActorRotation.Pitch),
-      FMath::DegreesToRadians(ActorRotation.Yaw));
+    // Handle linear velocity
+    FVector ActorVelocity = GetRosVelocity();
+    AccelerationBuffer.put(TPair<FVector, uint32>(ActorVelocity, TimeStamp));
+    
+    // Debug velocity data
+    if(PacketSeq % 100 == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Current Velocity: %f, %f, %f at time %f"), 
+            ActorVelocity.X, ActorVelocity.Y, ActorVelocity.Z, time_sec);
+    }
 
-  // Update for new CircularBufferMT
-  RotationBuffer.put(TPair<FVector, uint32>(ActorRotationRadians, TimeStamp_sec));
+    MathToolkitLibrary::calculateLinearFit(AccelerationBuffer, linear_fit_a_vel, linear_fit_b_vel, PacketSeq % 100 == 0);
 
-  if(PushedElements < ROTATION_BUFFER_SIZE)
-  {
-    PushedElements++;
-  }
+    if(PushedElements < ROTATION_BUFFER_SIZE)
+    {
+        PushedElements++;
+    }
 
-  MathToolkitLibrary::calculateLinearFit(RotationBuffer, linear_fit_a_rot, linear_fit_b_rot, false);
+    MathToolkitLibrary::calculateLinearFit(RotationBuffer, linear_fit_a_rot, linear_fit_b_rot, PacketSeq % 100 == 0);
 }
 
 bool UOusterGyroBaseComponent::ReadyToProcess()
@@ -110,19 +128,30 @@ FVector UOusterGyroBaseComponent::getExtrapolatedVelocity(double time)
 
 FVector UOusterGyroBaseComponent::getExtrapolatedRotation(double time)
 {
-  FVector result;
-  result.X = this->linear_fit_a_rot[0] * time + this->linear_fit_b_rot[0];
-  result.Y = this->linear_fit_a_rot[1] * time + this->linear_fit_b_rot[1];
-  result.Z = this->linear_fit_a_rot[2] * time + this->linear_fit_b_rot[2];
-  ////check(std::isnan(this->linear_fit_a_rot[2]) == false);
-/*
-  if(PacketSeq % 100 == 0)
-  {
-    UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters: %f, %f, %f, %f"), this->linear_fit_a_rot[0], this->linear_fit_a_rot[1], this->linear_fit_a_rot[2], time);
-    UE_LOG(LogTemp, Warning, TEXT("Extrapolation parameters offset: %f, %f, %f, %f"), this->linear_fit_b_rot[0], this->linear_fit_b_rot[1], this->linear_fit_b_rot[2],time);
-  }*/
-  return result;
+    // Input time is in microseconds, convert to seconds for calculations
+    double time_sec = time / 1000000.0;
+    
+    FVector result;
+    result.X = this->linear_fit_a_rot.X * time_sec + this->linear_fit_b_rot.X;
+    result.Y = this->linear_fit_a_rot.Y * time_sec + this->linear_fit_b_rot.Y;
+    result.Z = this->linear_fit_a_rot.Z * time_sec + this->linear_fit_b_rot.Z;
+
+    // Normalize angles to prevent unbounded growth
+    result.X = FMath::Fmod(result.X + PI, 2.0f * PI) - PI;
+    result.Y = FMath::Fmod(result.Y + PI, 2.0f * PI) - PI;
+    result.Z = FMath::Fmod(result.Z + PI, 2.0f * PI) - PI;
+
+    if(PacketSeq % 100 == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Extrapolating rotation at time %f sec: Roll=%f, Pitch=%f, Yaw=%f rad"), 
+            time_sec, result.X, result.Y, result.Z);
+        UE_LOG(LogTemp, Warning, TEXT("Using fit parameters: a=(%f, %f, %f), b=(%f, %f, %f)"),
+            linear_fit_a_rot.X, linear_fit_a_rot.Y, linear_fit_a_rot.Z,
+            linear_fit_b_rot.X, linear_fit_b_rot.Y, linear_fit_b_rot.Z);
+    }
+    return result;
 }
+
 void UOusterGyroBaseComponent::SnapshotCurrentData()
 {
   this->CurrentVelocity = this->Parent->GetVelocity();
@@ -314,19 +343,47 @@ FVector UOusterGyroBaseComponent::GetActorLinearAccel(double time)
 
 FVector UOusterGyroBaseComponent::GetActorRotationSpeed(double time)
 {
-  time = time / (double)10e6;
-  FVector AngularPosPrev = this->getExtrapolatedRotation(time - (1.f / this->Sensor.Frequency));
+    const double dt = 1.0 / static_cast<double>(this->Sensor.Frequency); // Time delta in seconds
+    const double time_sec = time / 1000000.0; // Convert microseconds to seconds
+    
+    // Get angular positions at two time points
+    FVector AngularPosPrev = this->getExtrapolatedRotation((time_sec - dt) * 1000000.0);
+    FVector AngularPosNow = this->getExtrapolatedRotation(time);
 
-  FVector AngularPosNow = this->getExtrapolatedRotation(time);
+    // Calculate angular velocity while handling wraparound
+    FVector vel;
+    for(int32 i = 0; i < 3; i++)
+    {
+        float diff = AngularPosNow[i] - AngularPosPrev[i];
+        
+        // Handle angle wraparound
+        if(diff > PI)
+        {
+            diff -= 2.0f * PI;
+        }
+        else if(diff < -PI)
+        {
+            diff += 2.0f * PI;
+        }
+        
+        vel[i] = diff / dt; // Result in rad/s
+    }
 
-  /*if(PacketSeq % 100 == 0)
-  {
-    UE_LOG(LogTemp, Warning, TEXT("AngularPosPrev: %f, %f, %f"), AngularPosPrev.X, AngularPosPrev.Y, AngularPosPrev.Z);
-    UE_LOG(LogTemp, Warning, TEXT("AngularPosNow: %f, %f, %f"), AngularPosNow.X, AngularPosNow.Y, AngularPosNow.Z);
-  }*/
-  FVector vel = (AngularPosNow - AngularPosPrev) / (1.f / this->Sensor.Frequency);
+    // Debug output
+    if(PacketSeq % 100 == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Time: %f sec, dt: %f sec"), time_sec, dt);
+        UE_LOG(LogTemp, Warning, TEXT("Previous position (rad): %f, %f, %f"), 
+            AngularPosPrev.X, AngularPosPrev.Y, AngularPosPrev.Z);
+        UE_LOG(LogTemp, Warning, TEXT("Current position (rad): %f, %f, %f"), 
+            AngularPosNow.X, AngularPosNow.Y, AngularPosNow.Z);
+        UE_LOG(LogTemp, Warning, TEXT("Angular velocity (rad/s): %f, %f, %f"), 
+            vel.X, vel.Y, vel.Z);
+        UE_LOG(LogTemp, Warning, TEXT("Angular velocity (deg/s): %f, %f, %f"), 
+            FMath::RadiansToDegrees(vel.X),
+            FMath::RadiansToDegrees(vel.Y),
+            FMath::RadiansToDegrees(vel.Z));
+    }
 
-  // AngularVelocity = AngularVelocity - this->CurrentRotation;
-
-  return vel;
+    return vel;
 }
