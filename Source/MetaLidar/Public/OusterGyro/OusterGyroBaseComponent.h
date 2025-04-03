@@ -110,6 +110,7 @@ private:
 
   FVector BeginPosition;
   FRotator BeginRotation;
+  FRotator BeginPawnRotation;  // New variable to store beginning pawn rotation
   bool ready;
 
   Odometry OdomData;

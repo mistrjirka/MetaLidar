@@ -68,7 +68,6 @@ void UOusterDepthBufferComponent::BeginPlay()
     int32 NumThreads = FPlatformMisc::NumberOfWorkerThreadsToSpawn();
 
     UE_LOG(LogTemp, Warning, TEXT("Number of threads: %d"), NumThreads);
-
 }
 
 int UOusterDepthBufferComponent::ScheduleCaptures()
@@ -105,7 +104,6 @@ int UOusterDepthBufferComponent::ScheduleCaptures()
         }
     }
     UE_LOG(LogTemp, Warning, TEXT("Scheduled captures: %d"), ScheduledCaptures.Num());
-
 
     return NumberOfSensors;
 }
@@ -297,66 +295,54 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
     uint32 y_offset,
     uint32 recursionDepth)
 {
-
-    /*std::pair<float,float> aproximateCoordinates = MathToolkitLibrary::CalculateNDCCoordinates(FMath::DegreesToRadians(horizontal), FMath::DegreesToRadians(vertical), SceneCapture->FOVAngle, RenderTarget->SizeX, RenderTarget->SizeY);
-    int32 x = FMath::RoundToInt(aproximateCoordinates.first);
-    int32 y = FMath::RoundToInt(aproximateCoordinates.second);
-    UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f, Coordinates %d %d"), horizontal, vertical, x,y);
-    FVector spherical = CalculateSphereCoordinateCached(frameBuffer, PointCache, x, y, RenderTarget->SizeX, RenderTarget->SizeY, SceneCapture->FOVAngle);
-    float r = spherical.X;
-    float hCoord = spherical.Y - FMath::DegreesToRadians(horizontalOffset + angleOffset);
-    float vCoord = -spherical.Z + (PI / 2.f);
-    float intensity = 1.0f;
-
-    PointXYZI point = PointXYZI(
-        r * FMath::Sin(vCoord) * FMath::Cos(hCoord),
-        r * FMath::Sin(vCoord) * FMath::Sin(hCoord),
-        r * FMath::Cos(vCoord) - zoffset,
-        intensity);
-    // DrawDebugPoint(GetWorld(), ParentTransform.TransformPosition(point), 5.0f, FFloat16Color::Red, false, (1/config.frequency)*1.5);
-
-    point = MathToolkitLibrary::ConvertUEToROS(point);
-
-    return GetCoordinateToAngleAccurate(SceneCapture, RenderTarget, frameBuffer, PointCache, horizontal, vertical, 1, height, horizontalOffset, x, 0);*/
-
-    if (width <= 12 && height <= 12)
+    vertical += 90.0f;
+    static int recursionCount = 0;
+    recursionCount++;
+    if(recursionCount%23 == 0)
     {
-        // UE_LOG(LogTemp, Warning, TEXT("Depth: %d"), recursionDepth);
-        // UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f, Width: %d, Height: %d, X Offset: %d, Y Offset: %d"), horizontal, vertical, width, height, x_offset, y_offset);
+        //UE_LOG(LogTemp, Warning, TEXT("horizontal: %f, vertical: %f, x_offset: %d, y_offset: %d"), horizontal, vertical, x_offset, y_offset);
+    }
+    // Compute aspect and FOV values
+    float AspectRatio = static_cast<float>(width) / height;
+    float FOVH = FMath::DegreesToRadians(SceneCapture->FOVAngle);
+    float FOVV = 2.0f * FMath::Atan(FMath::Tan(FOVH / 2.0f) / AspectRatio);
 
-        return GetCoordinateToAngleAccurate(SceneCapture, RenderTarget, frameBuffer, PointCache, horizontal, vertical, width, height, horizontalOffset, x_offset, y_offset);
+    // Convert horizontal & vertical angles from degrees to radians
+    float hcoord = FMath::DegreesToRadians(horizontal);
+    float vcoord = FMath::DegreesToRadians(vertical); // vcoord is the polar angle from the X-axis
+
+    // Calculate x using the formula: x = width/2 * (1 + tan(hcoord)/tan(FOVH/2))
+    // (Note: Ensure you perform the division on floating-point values before rounding)
+    float xFloat = (width / 2) * (1 + (FMath::Tan(hcoord)/FMath::Tan(FOVH / 2.0f)));//(width * (FMath::Tan(FOVH / 2.0f) + FMath::Tan(hcoord))) / (2.0f * FMath::Tan(FOVH / 2.0f));
+    int x = FMath::RoundToInt(xFloat);
+
+    // For y, compute the pitch relative to the center of the screen.
+    // Since your camera forward is along X, the center vertical angle corresponds to 90° (pi/2)
+    // Define pitch as the deviation from the center:
+    float pitch = vcoord - (PI / 2.0f);
+
+    // Map the pitch to NDC:
+    // When pitch = 0, NDC_Y = 0 (center); when pitch = FOVV/2, NDC_Y = 1 (top); when pitch = -FOVV/2, NDC_Y = -1 (bottom)
+    float NDC_Y = pitch / (FOVV / 2.0f);
+
+    // Convert NDC (range -1 to 1) to screen y coordinate (assuming y=0 is top)
+    int y = FMath::RoundToInt((height/2) * (1 - (FMath::Cos(vcoord) / (FMath::Sin(vcoord)*FMath::Cos(hcoord)*FMath::Tan(FOVV/2.0f)))));//FMath::RoundToInt((1.0f - NDC_Y) * height / 2.0f);
+
+    // Now use these x and y values to sample the depth buffer
+    if (x < 0 || x >= width || y < 0 || y >= height)
+    {
+        //UE_LOG(LogTemp, Warning, TEXT("Out of bounds: %d, %d"), x, y);
+        return PointXYZI(0, 0, 0, 0);
     }
 
-    int32 RenderWidth = RenderTarget->SizeX;
-    int32 RenderHeight = RenderTarget->SizeY;
-    float FOVH = SceneCapture->FOVAngle;
-    float FOVV = SceneCapture->FOVAngle * (RenderHeight / RenderWidth);
+    //UE_LOG(LogTemp, Warning, TEXT("X: %d, Y: %d"), x, y);
 
-    recursionDepth++;
+    float Depth = frameBuffer[(y * width) + x].R; // Depth in meters
+    std::pair<FVector, FVector> coords = MathToolkitLibrary::CalculateSphericalFromDepth(Depth, x, y, SceneCapture->FOVAngle, width, height);
+    FVector point = coords.second.RotateAngleAxis(-horizontalOffset, FVector(0, 0, 1));  
 
-    // Calculate The middle of the image
-    uint32 middleX = x_offset + width / 2;
-    uint32 middleY = y_offset + height / 2;
 
-    FVector spherical = CalculateSphereCoordinateCached(frameBuffer, PointCache, middleX, middleY, RenderWidth, RenderHeight, FOVH);
-    float r = spherical.X;
-    float hCoord = spherical.Y;
-    float vCoord = spherical.Z;
-
-    uint32 sectionCoords[2] = {0, 0};
-
-    sectionCoords[0] = hCoord <= FMath::DegreesToRadians(horizontal);
-    sectionCoords[1] = vCoord >= FMath::DegreesToRadians(vertical);
-
-    uint32 widthMargin = width / 5;
-    uint32 heightMargin = height / 5;
-
-    uint32 x_offset_new = x_offset + sectionCoords[0] * (width / 2 - widthMargin);
-    uint32 y_offset_new = y_offset + sectionCoords[1] * (height / 2 - heightMargin);
-    uint32 width_new = width / 2 + widthMargin;
-    uint32 height_new = height / 2 + heightMargin;
-
-    return GetCoordinateToAngle(SceneCapture, RenderTarget, frameBuffer, PointCache, horizontal, vertical, width_new, height_new, horizontalOffset, x_offset_new, y_offset_new, recursionDepth);
+    return PointXYZI(point.X, point.Y, point.Z, 255);
 }
 
 void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
@@ -409,10 +395,10 @@ void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
                 float AdjustedVerticalAngle = VerticalAngle - config.verticalFOV / 2.0f;
 
                 PointXYZI point = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle, CurrentBufferIndex);
-                if(point.range == 0 || point.range > 65000)
+                /*if(point.range == 0 || point.range > 65000)
                 {
                     continue;
-                }
+                }*/
                 point.x /= 100.0f;
                 point.y /= 100.0f;
                 point.z /= 100.0f;
@@ -484,32 +470,31 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
         captureReady.store(true);
     }
 
-   
-
     if (captureReady.load() && SensorsUpdated < Sensors.Num() && frameIndex < ScheduledCaptures.Num())
     {
-        //UE_LOG(LogTemp, Warning, TEXT("Updating sensor buffers"));
+        // UE_LOG(LogTemp, Warning, TEXT("Updating sensor buffers"));
         TArray<uint32> sensors = ScheduledCaptures[frameIndex];
 
         for (int i = 0; i < sensors.Num(); i++)
         {
-            //UE_LOG(LogTemp, Warning, TEXT("Updating sensor %d"), sensors[i]);
-            // Update one sensor's buffer per frame
+            // UE_LOG(LogTemp, Warning, TEXT("Updating sensor %d"), sensors[i]);
+            //  Update one sensor's buffer per frame
             UpdateBuffer(Sensors[sensors[i]].RenderTarget, Sensors[sensors[i]].ImageData[BufferIndex]);
             SensorsUpdated++;
         }
-    }else {
-        //UE_LOG(LogTemp, Warning, TEXT("Skipping frame"));
-        // reason for skipping frame
-        if(SensorsUpdated >= Sensors.Num())
+    }
+    else
+    {
+        // UE_LOG(LogTemp, Warning, TEXT("Skipping frame"));
+        //  reason for skipping frame
+        if (SensorsUpdated >= Sensors.Num())
         {
-            //UE_LOG(LogTemp, Warning, TEXT("All sensors updated"));
+            // UE_LOG(LogTemp, Warning, TEXT("All sensors updated"));
         }
-        if(frameIndex >= ScheduledCaptures.Num())
+        if (frameIndex >= ScheduledCaptures.Num())
         {
-            //UE_LOG(LogTemp, Warning, TEXT("Frame index exceeded scheduled captures %d"), frameIndex);
+            // UE_LOG(LogTemp, Warning, TEXT("Frame index exceeded scheduled captures %d"), frameIndex);
         }
-        
     }
     frameIndex++;
 
@@ -576,7 +561,7 @@ PointXYZI UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponen
     PointXYZI point = GetCoordinateToAngle(Sensors[sensorIndex].SceneCapture, Sensors[sensorIndex].RenderTarget, Sensors[sensorIndex].ImageData[CurrentBufferIndex], Sensors[sensorIndex].PointCache[CurrentBufferIndex], calculationHorizontalAngle, VerticalAngle, Width, Height, offset);
     // debug line to the point
     // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FFloat16Color::Red, false, 1/config.frequency, 0, 1.0f);
-    
+
     return point;
 }
 

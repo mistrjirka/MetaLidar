@@ -39,12 +39,18 @@ void UOusterGyroBaseComponent::InitializeSensor()
     UE_LOG(LogTemp, Warning, TEXT("Parent is null!"));
     return;
   }
+  
+  UE_LOG(LogTemp, Warning, TEXT("Parent orientation: %f, %f, %f"), myParent->GetActorRotation().Roll, myParent->GetActorRotation().Pitch, myParent->GetActorRotation().Yaw);
+
   Parent = myParent->GetAttachParentActor();
   if (Parent == nullptr)
   {
     UE_LOG(LogTemp, Warning, TEXT("Parent is null! 2"));
     return;
   }
+  UE_LOG(LogTemp, Warning, TEXT("Parent orientation 2: %f, %f, %f"), Parent->GetActorRotation().Roll, Parent->GetActorRotation().Pitch, Parent->GetActorRotation().Yaw);
+  UE_LOG(LogTemp, Warning, TEXT("Parent name: %s"), *Parent->GetName());
+  
 }
 
 void UOusterGyroBaseComponent::TickComponent(float DeltaTime, ELevelTick TickType,
@@ -171,7 +177,13 @@ FVector UOusterGyroBaseComponent::GetRosVelocity()
 FVector UOusterGyroBaseComponent::GetRosCurrentPosition()
 {
   FVector ActorPosition = this->Parent->GetActorLocation() - this->BeginPosition;
-  FRotator rotation = FRotator(this->BeginRotation.Pitch, this->BeginRotation.Yaw, this->BeginRotation.Roll);
+  
+  // Apply parent pawn's orientation if it exists
+  FRotator rotation;
+  
+  rotation = FRotator(this->BeginRotation.Pitch, this->BeginRotation.Yaw, this->BeginRotation.Roll);
+  
+  
   FVector UnrotatedPosition = rotation.UnrotateVector(ActorPosition);
   ActorPosition = MathToolkitLibrary::ConvertUEToROS(UnrotatedPosition);
   return ActorPosition;
@@ -180,6 +192,9 @@ FVector UOusterGyroBaseComponent::GetRosCurrentPosition()
 FRotator UOusterGyroBaseComponent::GetRosCurrentRotation()
 {
   FRotator ActorRotation = this->CurrentRotation;
+  // Apply offset from parent pawn if it exists
+  ActorRotation = ActorRotation - BeginRotation;
+  
 
   ActorRotation = MathToolkitLibrary::ConvertUEToROSAngleDegree(ActorRotation);
   return ActorRotation;
@@ -207,7 +222,7 @@ bool UOusterGyroBaseComponent::GenerateDataPacket(uint32 TimeStamp)
       this->BeginPosition = this->Parent->GetActorLocation();
       this->BeginRotation = this->Parent->GetActorRotation();
       //UE_LOG(LogTemp, Warning, TEXT("BeginPosition: %f, %f, %f"), this->BeginPosition.X, this->BeginPosition.Y, this->BeginPosition.Z);
-      //UE_LOG(LogTemp, Warning, TEXT("BeginRotation: %f, %f, %f"), this->Parent->GetActorRotation().Pitch, this->Parent->GetActorRotation().Yaw, this->Parent->GetActorRotation().Roll);
+      UE_LOG(LogTemp, Warning, TEXT("BeginRotation: %f, %f, %f"), this->Parent->GetActorRotation().Pitch, this->Parent->GetActorRotation().Yaw, this->Parent->GetActorRotation().Roll);
       ready = true;
     }
 
