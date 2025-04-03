@@ -315,7 +315,6 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
     // (Note: Ensure you perform the division on floating-point values before rounding)
     float xFloat = (width / 2) * (1 + (FMath::Tan(hcoord)/FMath::Tan(FOVH / 2.0f)));//(width * (FMath::Tan(FOVH / 2.0f) + FMath::Tan(hcoord))) / (2.0f * FMath::Tan(FOVH / 2.0f));
     int x = FMath::RoundToInt(xFloat);
-
     // For y, compute the pitch relative to the center of the screen.
     // Since your camera forward is along X, the center vertical angle corresponds to 90° (pi/2)
     // Define pitch as the deviation from the center:
@@ -340,9 +339,18 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
     float Depth = frameBuffer[(y * width) + x].R; // Depth in meters
     std::pair<FVector, FVector> coords = MathToolkitLibrary::CalculateSphericalFromDepth(Depth, x, y, SceneCapture->FOVAngle, width, height);
     FVector point = coords.second.RotateAngleAxis(-horizontalOffset, FVector(0, 0, 1));  
+    float intensity = 2.0f;
+    uint16_t reflectivity = 255;
+    uint32 range = 20; // Convert to mm
 
 
-    return PointXYZI(point.X, point.Y, point.Z, 255);
+    uint16_t ring = FMath::RoundToInt(((vertical - (PI/2) + config.verticalFOV / 2.f) / config.verticalFOV) * config.verticalResolution);
+    return PointXYZI(point.X, point.Y, point.Z,  intensity,
+        2,
+        reflectivity,
+        ring,
+        0,
+        range);
 }
 
 void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
@@ -369,10 +377,10 @@ void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
     auto start = high_resolution_clock::now();
 
     // Determine the number of worker threads to use
-    int32 NumThreads = FPlatformMisc::NumberOfWorkerThreadsToSpawn();
+    int32 NumThreads = 2;
     if (NumThreads <= 1)
     {
-        NumThreads = 1; // Fallback to single-threaded execution if only one worker thread is suggested
+        NumThreads = 2; // Fallback to single-threaded execution if only one worker thread is suggested
     }
 
     // create array for each thread
@@ -397,6 +405,7 @@ void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
                 PointXYZI point = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle, CurrentBufferIndex);
                 if(point.range == 0 || point.range > 65000)
                 {
+                    UE_LOG(LogTemp, Warning, TEXT("Invalid point: %d"), point.range);
                     continue;
                 }
                 point.x /= 100.0f;
