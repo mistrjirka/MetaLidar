@@ -395,10 +395,10 @@ void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
                 float AdjustedVerticalAngle = VerticalAngle - config.verticalFOV / 2.0f;
 
                 PointXYZI point = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle, CurrentBufferIndex);
-                /*if(point.range == 0 || point.range > 65000)
+                if(point.range == 0 || point.range > 65000)
                 {
                     continue;
-                }*/
+                }
                 point.x /= 100.0f;
                 point.y /= 100.0f;
                 point.z /= 100.0f;
