@@ -303,7 +303,7 @@ void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
             
             // Calculate 3D position from depth
             std::pair<FVector, FVector> coords = MathToolkitLibrary::CalculateSphericalFromDepth(
-                depth, x, y, sceneCapture->FOVAngle, width, height);
+                depth, x, y, TanHalfFOVHRad, TanHalfFOVVRad, width, height);
                 
             FVector point = coords.second.RotateAngleAxis(-offset, FVector(0, 0, 1));
             
