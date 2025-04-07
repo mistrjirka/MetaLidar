@@ -52,8 +52,13 @@ typedef struct SensorField
     TObjectPtr<USceneCaptureComponent2D> SceneCapture;
     TObjectPtr<UTextureRenderTarget2D> RenderTarget;
     TArray<FFloat16Color> ImageData[2];
-    TArray<Vector3Fast> PointCache[2];
 } SensorField;
+
+typedef struct PixelCache2D
+{
+    uint32 x;
+    uint32 y;
+} PixelCache2D;
 
 enum STATE : uint8
 {
@@ -113,11 +118,15 @@ private:
 
     TThreadSafeArray<PointXYZI> PointCloud;
 
-    FVector CalculateSphereCoordinateCached(TArray<FFloat16Color> &frameBuffer,
-                                            TArray<Vector3Fast> &PointCache,
-                                            uint32 x, uint32 y, uint32 width, uint32 height, float FOVH);
+    TArray<TArray<PixelCache2D>> PixelCache;
 
+    std::atomic<bool> isProcessing;
     std::unique_ptr<SharedMemory> shared_memory;
+    float TanHalfFOVVRad;
+    float TanHalfFOVHRad;
+    float FOVV;
+    float FOVH;
+    int numberOfThreads;
 
     void InitializeCaptureComponent();
 
@@ -125,36 +134,22 @@ private:
 
     void CaptureScene();
 
-    PointXYZI GetCoordinateToAngleAccurate(
-        TObjectPtr<USceneCaptureComponent2D> SceneCapture,
-        TObjectPtr<UTextureRenderTarget2D> RenderTarget,
-        TArray<FFloat16Color> &frameBuffer,
-        TArray<Vector3Fast> &PointCache,
-        float horizontal,
-        float vertical,
-        uint32 width,
-        uint32 height,
-        float horizontalOffset,
-        uint32 x_offset = 0,
-        uint32 y_offset = 0);
-
     PointXYZI GetCoordinateToAngle(
         TObjectPtr<USceneCaptureComponent2D> SceneCapture,
         TObjectPtr<UTextureRenderTarget2D> RenderTarget,
         TArray<FFloat16Color> &frameBuffer,
-        TArray<Vector3Fast> &PointCache,
         float horizontal,
         float vertical,
         uint32 width,
         uint32 height,
-        float horizontalOffset,
-        uint32 x_offset = 0,
-        uint32 y_offset = 0,
-        uint32 step = 0);
+        float horizontalOffset = 0.0f
+    );
 
     float NormalizedAngle(float HorizontalAngle);
 
     void UpdateBuffer(TObjectPtr<UTextureRenderTarget2D>, TArray<FFloat16Color> &);
+
+    void InitializeCache();
 
     PointXYZI GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle, uint32 CurrentBufferIndex);
 
@@ -178,9 +173,8 @@ private:
     int32 frameIndex;
     int32 SensorsUpdated;
     int32 FramesAvailableForProcessing;
+
     uint32 BufferIndex;
     
     void SwitchBuffer();
-
-    std::atomic<bool> isProcessing;
 };
