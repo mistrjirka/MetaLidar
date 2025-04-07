@@ -135,26 +135,11 @@ private:
 
     void CaptureScene();
 
-    PointXYZI GetCoordinateToAngle(
-        TObjectPtr<USceneCaptureComponent2D> SceneCapture,
-        TObjectPtr<UTextureRenderTarget2D> RenderTarget,
-        TArray<FFloat16Color> &frameBuffer,
-        float horizontal,
-        float vertical,
-        uint32 width,
-        uint32 height,
-        float horizontalOffset = 0.0f
-    );
-
     float NormalizedAngle(float HorizontalAngle);
 
     void UpdateBuffer(TObjectPtr<UTextureRenderTarget2D>, TArray<FFloat16Color> &);
 
     void InitializeCache();
-
-    PointXYZI GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle, uint32 CurrentBufferIndex);
-
-    float GetPixelFromAngle(TObjectPtr<USceneCaptureComponent2D> SceneCapture, TObjectPtr<UTextureRenderTarget2D> RenderTarget, TArray<FFloat16Color> &frameBuffer, float HorizontalAngle, float VerticalAngle);
 
     uint32 CalculatePointStep(const TArray<PointField> &fields);
     uint32 GenerateData(uint8 *data, uint32 size, uint32 timestamp);
