@@ -229,6 +229,7 @@ float UOusterDepthBufferComponent::NormalizedAngle(float HorizontalAngle)
     return fmod(HorizontalAngle, (360.0f / Sensors.Num())) - 360.0f / Sensors.Num() / 2;
 }
 
+// Remove this angle-based function since it's redundant with the pixel cache
 PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
     TObjectPtr<USceneCaptureComponent2D> SceneCapture,
     TObjectPtr<UTextureRenderTarget2D> RenderTarget,
@@ -240,165 +241,161 @@ PointXYZI UOusterDepthBufferComponent::GetCoordinateToAngle(
     float horizontalOffset
 )
 {
-    vertical += 90.0f;
-    static int recursionCount = 0;
-    recursionCount++;
-    if(recursionCount%23 == 0)
-    {
-        //UE_LOG(LogTemp, Warning, TEXT("horizontal: %f, vertical: %f, x_offset: %d, y_offset: %d"), horizontal, vertical, x_offset, y_offset);
-    }
-    // Compute aspect and FOV values
-    float AspectRatio = static_cast<float>(width) / height;
-
-    // Convert horizontal & vertical angles from degrees to radians
-    float hcoord = FMath::DegreesToRadians(horizontal);
-    float vcoord = FMath::DegreesToRadians(vertical); // vcoord is the polar angle from the X-axis
-
-    // Calculate x using the formula: x = width/2 * (1 + tan(hcoord)/tan(FOVH/2))
-    // (Note: Ensure you perform the division on floating-point values before rounding)
-    float xFloat = (width / 2) * (1 + (FMath::Tan(hcoord)/FMath::Tan(FOVH / 2.0f)));//(width * (FMath::Tan(FOVH / 2.0f) + FMath::Tan(hcoord))) / (2.0f * FMath::Tan(FOVH / 2.0f));
-    int x = FMath::RoundToInt(xFloat);
-    // For y, compute the pitch relative to the center of the screen.
-    // Since your camera forward is along X, the center vertical angle corresponds to 90° (pi/2)
-    // Define pitch as the deviation from the center:
-    float pitch = vcoord - (PI / 2.0f);
-
-    // Map the pitch to NDC:
-    // When pitch = 0, NDC_Y = 0 (center); when pitch = FOVV/2, NDC_Y = 1 (top); when pitch = -FOVV/2, NDC_Y = -1 (bottom)
-    float NDC_Y = pitch / (FOVV / 2.0f);
-
-    // Convert NDC (range -1 to 1) to screen y coordinate (assuming y=0 is top)
-    int y = FMath::RoundToInt((height/2) * (1 - (FMath::Cos(vcoord) / (FMath::Sin(vcoord)*FMath::Cos(hcoord)*FMath::Tan(FOVV/2.0f)))));//FMath::RoundToInt((1.0f - NDC_Y) * height / 2.0f);
-
-    // Now use these x and y values to sample the depth buffer
-    if (x < 0 || x >= width || y < 0 || y >= height)
-    {
-        //UE_LOG(LogTemp, Warning, TEXT("Out of bounds: %d, %d"), x, y);
-        return PointXYZI(0, 0, 0, 0);
-    }
-
-    //UE_LOG(LogTemp, Warning, TEXT("X: %d, Y: %d"), x, y);
-
-    float Depth = frameBuffer[(y * width) + x].R; // Depth in meters
-    std::pair<FVector, FVector> coords = MathToolkitLibrary::CalculateSphericalFromDepth(Depth, x, y, SceneCapture->FOVAngle, width, height);
-    FVector point = coords.second.RotateAngleAxis(-horizontalOffset, FVector(0, 0, 1));  
-    float intensity = 2.0f;
-    uint16_t reflectivity = 255;
-    uint32 range = 20; // Convert to mm
-
-
-    uint16_t ring = FMath::RoundToInt(((vertical - (PI/2) + config.verticalFOV / 2.f) / config.verticalFOV) * config.verticalResolution);
-    return PointXYZI(point.X, point.Y, point.Z,  intensity,
-        2,
-        reflectivity,
-        ring,
-        0,
-        range);
+    // This function is now replaced by GetPointFromCachedPixel
+    // Keeping minimal implementation for backward compatibility if needed
+    int32 sensorIndex = FMath::Floor(horizontal / (360.0f / Sensors.Num()));
+    sensorIndex = FMath::Clamp(sensorIndex, 0, Sensors.Num() - 1);
+    
+    int horizontalIndex = FMath::RoundToInt(horizontal / (360.0f / config.horizontalResolution));
+    int verticalIndex = FMath::RoundToInt((vertical + config.verticalFOV / 2.0f) / (config.verticalFOV / config.verticalResolution));
+    
+    horizontalIndex = FMath::Clamp(horizontalIndex, 0, (int)config.horizontalResolution - 1);
+    verticalIndex = FMath::Clamp(verticalIndex, 0, (int)config.verticalResolution - 1);
+    
+    return GetPointFromCachedPixel(sensorIndex, horizontalIndex, verticalIndex, frameBuffer, horizontalOffset);
 }
 
+// New helper function to get a point directly from cached pixel coordinates
+PointXYZI UOusterDepthBufferComponent::GetPointFromCachedPixel(
+    int32 sensorIndex,
+    int32 horizontalIndex,
+    int32 verticalIndex,
+    TArray<FFloat16Color> &frameBuffer,
+    float horizontalOffset
+)
+{
+    // Get the cached pixel coordinates
+    int32 pixelIndex = horizontalIndex * config.verticalResolution + verticalIndex;
+    if (pixelIndex < 0 || pixelIndex >= PixelCache[sensorIndex].Num())
+    {
+        return PointXYZI(0, 0, 0, 0);
+    }
+    
+    int32 x = PixelCache[sensorIndex][pixelIndex].x;
+    int32 y = PixelCache[sensorIndex][pixelIndex].y;
+    
+    // Get render target dimensions
+    int32 width = Sensors[sensorIndex].RenderTarget->SizeX;
+    int32 height = Sensors[sensorIndex].RenderTarget->SizeY;
+    
+    // Ensure pixel is within bounds
+    if (x < 0 || x >= width || y < 0 || y >= height)
+    {
+        return PointXYZI(0, 0, 0, 0);
+    }
+    
+    // Get depth value
+    float depth = frameBuffer[(y * width) + x].R;
+    
+    // Calculate 3D position from depth
+    std::pair<FVector, FVector> coords = MathToolkitLibrary::CalculateSphericalFromDepth(
+        depth, x, y, Sensors[sensorIndex].SceneCapture->FOVAngle, width, height);
+    
+    // Apply rotation
+    FVector point = coords.second.RotateAngleAxis(-horizontalOffset, FVector(0, 0, 1));
+    
+    // Calculate vertical angle for ring determination
+    float step = 360.0f / Sensors.Num();
+    float verticalAngle = (verticalIndex * (config.verticalFOV / config.verticalResolution));
+    uint16_t ring = verticalIndex;
+    
+    // Populate point data
+    return PointXYZI(
+        point.X, point.Y, point.Z,
+        2.0f,  // intensity
+        2,     // laser id
+        255,   // reflectivity
+        ring,
+        0,
+        20     // range (default value)
+    );
+}
+
+// Simplify this function to just use the cached pixel
+PointXYZI UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle, uint32 CurrentBufferIndex)
+{
+    float step = 360.0f / Sensors.Num();
+    int sensorIndex = FMath::Floor(HorizontalAngle / step);
+    sensorIndex = FMath::Clamp(sensorIndex, 0, Sensors.Num() - 1);
+    
+    int horizontalIndex = FMath::RoundToInt(HorizontalAngle / (360.0f / config.horizontalResolution));
+    int verticalIndex = FMath::RoundToInt((VerticalAngle + config.verticalFOV / 2.0f) / (config.verticalFOV / config.verticalResolution));
+    
+    horizontalIndex = FMath::Clamp(horizontalIndex, 0, (int)config.horizontalResolution - 1);
+    verticalIndex = FMath::Clamp(verticalIndex, 0, (int)config.verticalResolution - 1);
+    
+    float offset = 360.0f - step * sensorIndex - step / 2.0f;
+    
+    return GetPointFromCachedPixel(sensorIndex, horizontalIndex, verticalIndex, 
+                                 Sensors[sensorIndex].ImageData[CurrentBufferIndex], offset);
+}
+
+// Completely rewrite CaptureDepth to use the pixel cache directly
 void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
 {
-    // UE_LOG(LogTemp, Warning, TEXT("CaptureDepth"));
-
     AActor *ParentActor = GetOwner();
-
     if (!ParentActor)
     {
         return;
     }
 
-    FTransform ParentTransform = ParentActor->GetActorTransform();
-
-    float HorizontalAngleStep = 360.0f / config.horizontalResolution;
-    float VerticalAngleStep = config.verticalFOV / config.verticalResolution;
-    float horizontalFOV = config.horizontalResolution;
-    float verticalFOV = config.verticalResolution;
-    uint32 HorizontalResolution = config.horizontalResolution;
-    uint32 VerticalResolution = config.verticalResolution;
-
-    // UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle Step: %f, Vertical Angle Step: %f Horizontal Resolution: %d, Vertical Resolution: %d"), HorizontalAngleStep, VerticalAngleStep, config.horizontalResolution, config.verticalResolution);
     auto start = high_resolution_clock::now();
-
+    
     // Determine the number of worker threads to use
-    int32 NumThreads = 2;
+    int32 NumThreads = FPlatformMisc::NumberOfWorkerThreadsToSpawn();
     if (NumThreads <= 1)
     {
-        NumThreads = 2; // Fallback to single-threaded execution if only one worker thread is suggested
+        NumThreads = 2;
     }
-
-    // create array for each thread
-    //  Calculate the chunk size for each thread
-    int32 ChunkSize = FMath::CeilToInt((float)HorizontalResolution / NumThreads);
-
+    
+    // Calculate total number of pixels to process across all sensors
+    int32 totalPixels = config.horizontalResolution * config.verticalResolution;
+    int32 ChunkSize = FMath::CeilToInt((float)totalPixels / NumThreads);
+    
+    // Process in parallel
     ParallelFor(NumThreads, [&](int32 ThreadIndex)
-                {
-        // Calculate the start and end indices for the current thread
-
+    {
         int32 StartIndex = ThreadIndex * ChunkSize;
-
-        float HorizontalAngle = StartIndex * HorizontalAngleStep;
-        float VerticalAngle = 0;
-        int32 EndIndex = fmin(StartIndex + ChunkSize, HorizontalResolution);
-        for (int32 i = StartIndex; i < EndIndex; i++)
+        int32 EndIndex = FMath::Min(StartIndex + ChunkSize, totalPixels);
+        
+        for (int32 pixelIndex = StartIndex; pixelIndex < EndIndex; pixelIndex++)
         {
-            for (int32 j = 0; j < VerticalResolution; j++)
+            int32 horizontalIndex = pixelIndex / config.verticalResolution;
+            int32 verticalIndex = pixelIndex % config.verticalResolution;
+            
+            float horizontalAngle = horizontalIndex * (360.0f / config.horizontalResolution);
+            int32 sensorIndex = FMath::Floor(horizontalAngle / (360.0f / Sensors.Num()));
+            sensorIndex = FMath::Clamp(sensorIndex, 0, Sensors.Num() - 1);
+            
+            float step = 360.0f / Sensors.Num();
+            float offset = 360.0f - step * sensorIndex - step / 2.0f;
+            
+            PointXYZI point = GetPointFromCachedPixel(
+                sensorIndex, 
+                horizontalIndex, 
+                verticalIndex, 
+                Sensors[sensorIndex].ImageData[CurrentBufferIndex], 
+                offset
+            );
+            
+            if (point.range == 0 || point.range > 65000)
             {
-                float AdjustedVerticalAngle = VerticalAngle - config.verticalFOV / 2.0f;
-
-                PointXYZI point = GetPixelValueFromMutltipleCaptureComponents(HorizontalAngle, AdjustedVerticalAngle, CurrentBufferIndex);
-                if(point.range == 0 || point.range > 65000)
-                {
-                    UE_LOG(LogTemp, Warning, TEXT("Invalid point: %d"), point.range);
-                    continue;
-                }
-                point.x /= 100.0f;
-                point.y /= 100.0f;
-                point.z /= 100.0f;
-
-                //UE_LOG(LogTemp, Warning, TEXT("Front: X: %f, Y: %f, Z: %f Horizontal Angle: %f, Vertical Angle: %f"), point.X, point.Y, point.Z, HorizontalAngle, VerticalAngle);
-                
-                PointCloud.Add(point);
-
-                VerticalAngle += VerticalAngleStep;
+                continue;
             }
-
-            HorizontalAngle += HorizontalAngleStep;
-            VerticalAngle = 0;
-        } });
-
+            
+            point.x /= 100.0f;
+            point.y /= 100.0f;
+            point.z /= 100.0f;
+            
+            PointCloud.Add(point);
+        }
+    });
+    
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
-
+    
     UE_LOG(LogTemp, Warning, TEXT("Time taken by function: %d microseconds"), duration.count());
-
     UE_LOG(LogTemp, Warning, TEXT("PointCloud size: %d"), PointCloud.Num());
-}
-
-PointXYZI UOusterDepthBufferComponent::GetPixelValueFromMutltipleCaptureComponents(float HorizontalAngle, float VerticalAngle, uint32 CurrentBufferIndex)
-{
-
-    float calculationHorizontalAngle = NormalizedAngle(HorizontalAngle);
-
-    float step = 360.0f / Sensors.Num();
-    int sensorIndex = FMath::Floor(HorizontalAngle / step);
-    /*if(sensorIndex != 0)
-    {
-        return PointXYZI(0,0,0,0);
-    }*/
-    // UE_LOG(LogTemp, Warning, TEXT("Sensor index: %d"), sensorIndex);
-    // UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Vertical Angle: %f"), HorizontalAngle, VerticalAngle);
-    // UE_LOG(LogTemp, Warning, TEXT("step %f"), step);
-
-    int32 Width = Sensors[sensorIndex].RenderTarget->SizeX;
-    int32 Height = Sensors[sensorIndex].RenderTarget->SizeY;
-    float offset = 360 - step * sensorIndex - step / 2;
-    // UE_LOG(LogTemp, Warning, TEXT("Horizontal Angle: %f, Normalized: %f Vertical Angle: %f, Sensor Index: %d, Offset: %f"), calculationHorizontalAngle, HorizontalAngle, VerticalAngle, sensorIndex, offset);
-
-    PointXYZI point = GetCoordinateToAngle(Sensors[sensorIndex].SceneCapture, Sensors[sensorIndex].RenderTarget, Sensors[sensorIndex].ImageData[CurrentBufferIndex], calculationHorizontalAngle, VerticalAngle, Width, Height, offset);
-    // debug line to the point
-    // DrawDebugLine(GetWorld(), ParentTransform.GetLocation(), point, FFloat16Color::Red, false, 1/config.frequency, 0, 1.0f);
-
-    return point;
 }
 
 uint32 UOusterDepthBufferComponent::GenerateData(uint8 *data, uint32 size, uint32 timestamp)

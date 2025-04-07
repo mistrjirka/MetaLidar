@@ -177,4 +177,13 @@ private:
     uint32 BufferIndex;
     
     void SwitchBuffer();
+
+    // Add the new helper function to get points from cached pixels
+    PointXYZI GetPointFromCachedPixel(
+        int32 sensorIndex,
+        int32 horizontalIndex,
+        int32 verticalIndex,
+        TArray<FFloat16Color> &frameBuffer,
+        float horizontalOffset = 0.0f
+    );
 };
