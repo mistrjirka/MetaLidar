@@ -116,7 +116,8 @@ private:
 
     FMatrix projectionMatrix;
 
-    TThreadSafeArray<PointXYZI> PointCloud;
+    // Replace TThreadSafeArray with 2D array
+    TArray<TArray<PointXYZI>> PointCloud;
 
     TArray<TArray<PixelCache2D>> PixelCache;
 

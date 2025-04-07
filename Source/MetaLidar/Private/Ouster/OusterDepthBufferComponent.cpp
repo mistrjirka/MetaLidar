@@ -74,6 +74,7 @@ void UOusterDepthBufferComponent::BeginPlay()
 
 void UOusterDepthBufferComponent::InitializeCache()
 {
+    
     PixelCache.Empty();
     PixelCache.SetNum(Sensors.Num());
 
@@ -96,6 +97,11 @@ void UOusterDepthBufferComponent::InitializeCache()
     float verticalFOV = config.verticalResolution;
     int singleSensorHorizontalCapture = FMath::CeilToInt((float)config.horizontalResolution / Sensors.Num());
     
+    for(int i = 0; i < Sensors.Num(); i++)
+    {
+        PointCloud.Add(TArray<PointXYZI>());
+        PointCloud[i].SetNum(singleSensorHorizontalCapture * config.verticalResolution);
+    }
     for (int i = 0; i < Sensors.Num(); i++)
     {
         float HorizontalAngle = 0;
@@ -345,7 +351,11 @@ void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
     // Change parallelization to use one thread per sensor
     int32 NumSensors = Sensors.Num();
     
-    // Create a critical section for thread-safe access to PointCloud
+    // Initialize the 2D PointCloud array with one array per sensor
+    for(auto& pointcloudArray : PointCloud)
+    {
+        pointcloudArray.Reset(PixelCache[0].Num());
+    }
     
     // Process in parallel - one thread per sensor
     ParallelFor(NumSensors, [&](int32 SensorIndex)
@@ -356,6 +366,7 @@ void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
         TObjectPtr<UTextureRenderTarget2D> renderTarget = Sensors[SensorIndex].RenderTarget;
         TObjectPtr<USceneCaptureComponent2D> sceneCapture = Sensors[SensorIndex].SceneCapture;
         
+        
         // Calculate the offset for this sensor
         float step = 360.0f / NumSensors;
         float offset = 360.0f - step * SensorIndex - step / 2.0f;
@@ -363,7 +374,6 @@ void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
         // Get render target dimensions
         int32 width = renderTarget->SizeX;
         int32 height = renderTarget->SizeY;
-        
         
         // Process all pixels for this sensor
         for (int32 pixelIndex = 0; pixelIndex < sensorPixelCache.Num(); pixelIndex++)
@@ -416,36 +426,59 @@ void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
                 continue;
             }
             
-            // Add to local collection
-            PointCloud.Add(pointData);
+            // Add to this sensor's point collection - no locking needed
+            PointCloud[SensorIndex].Add(pointData);
         }
-        
-        
     });
     
     auto stop = high_resolution_clock::now();
     auto duration = duration_cast<microseconds>(stop - start);
     
+    // Calculate total points
+    int32 totalPoints = 0;
+    for (const TArray<PointXYZI>& sensorPoints : PointCloud)
+    {
+        totalPoints += sensorPoints.Num();
+    }
+    
     UE_LOG(LogTemp, Warning, TEXT("Time taken by function: %d microseconds"), duration.count());
-    UE_LOG(LogTemp, Warning, TEXT("PointCloud size: %d"), PointCloud.Num());
+    UE_LOG(LogTemp, Warning, TEXT("Total point cloud size: %d"), totalPoints);
 }
 
 uint32 UOusterDepthBufferComponent::GenerateData(uint8 *data, uint32 size, uint32 timestamp)
 {
     uint32 timestamp_sec = timestamp / 1000000;
     uint32 timestamp_nsec = (timestamp % 1000000) * 1000;
-    size_t packet_size = 0;
+    
+    // Calculate total points from all sensor arrays
+    int32 totalPoints = 0;
+    for (const TArray<PointXYZI>& sensorPoints : PointCloud)
+    {
+        totalPoints += sensorPoints.Num();
+    }
+    
+    // Setup point cloud header
     PointCloud2Reduced *pointCloud = (PointCloud2Reduced *)data;
     pointCloud->height = 1;
-    pointCloud->width = PointCloud.Num();
+    pointCloud->width = totalPoints;
     pointCloud->is_bigendian = false;
     pointCloud->point_step = config.PointStep;
     pointCloud->row_step = pointCloud->width;
     pointCloud->is_dense = true;
-
-    std::memcpy(pointCloud->data, (uint8 *)PointCloud.GetPointerUnsafe(), PointCloud.Num() * sizeof(PointXYZI));
-
-    return sizeof(PointCloud2Reduced) + pointCloud->width * pointCloud->point_step;
+    
+    // Copy points from each sensor array with multiple memcpy operations
+    uint8* destPtr = (uint8*)pointCloud->data;
+    for (const TArray<PointXYZI>& sensorPoints : PointCloud)
+    {
+        if (sensorPoints.Num() > 0)
+        {
+            size_t bytesToCopy = sensorPoints.Num() * sizeof(PointXYZI);
+            std::memcpy(destPtr, (uint8*)sensorPoints.GetData(), bytesToCopy);
+            destPtr += bytesToCopy;
+        }
+    }
+    
+    return sizeof(PointCloud2Reduced) + totalPoints * pointCloud->point_step;
 }
 
 void UOusterDepthBufferComponent::GenerateDataPacket(uint32 TimeStamp)
@@ -520,7 +553,6 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
         SwitchBuffer();
         AsyncTask(ENamedThreads::AnyThread, [this, processStartTime, CurrentBufferIndex]()
                   {
-                      PointCloud.Reset();
                       this->CaptureDepth(CurrentBufferIndex);
                       this->GenerateDataPacket(this->GetTimestampMicroseconds());
                       readySendingData.store(true);
