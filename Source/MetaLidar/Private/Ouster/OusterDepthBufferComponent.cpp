@@ -317,7 +317,7 @@ void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
                 255,   // reflectivity
                 verticalIndex, // ring
                 0,     // time
-                coords.first.X // range
+                coords.first.X/100 // range
             );
             
             // Skip invalid ranges as additional check
