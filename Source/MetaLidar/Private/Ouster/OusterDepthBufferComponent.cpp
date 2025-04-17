@@ -111,7 +111,7 @@ void UOusterDepthBufferComponent::InitializeCache()
             float VerticalAngle = - config.verticalFOV / 2.0f;
             for(int k = 0; k < config.verticalResolution; k++)
             {
-                UE_LOG(LogTemp, Warning, TEXT("Horizontal angle: %f, Vertical angle: %f"), NormalizedAngle(HorizontalAngle), VerticalAngle);
+                //UE_LOG(LogTemp, Warning, TEXT("Horizontal angle: %f, Vertical angle: %f"), NormalizedAngle(HorizontalAngle), VerticalAngle);
                 float hcoord = FMath::DegreesToRadians(NormalizedAngle(HorizontalAngle));
                 float vcoord = FMath::DegreesToRadians(VerticalAngle + 90.0f ); 
                 int x = FMath::RoundToInt((width / 2) * (1 + (FMath::Tan(hcoord)/FMath::Tan(FOVH / 2.0f))));
@@ -341,8 +341,8 @@ void UOusterDepthBufferComponent::CaptureDepth(uint32 CurrentBufferIndex)
         totalPoints += sensorPoints.Num();
     }
     
-    UE_LOG(LogTemp, Warning, TEXT("Time taken by function: %d microseconds"), duration.count());
-    UE_LOG(LogTemp, Warning, TEXT("Total point cloud size: %d"), totalPoints);
+    //UE_LOG(LogTemp, Warning, TEXT("Time taken by function: %d microseconds"), duration.count());
+    //UE_LOG(LogTemp, Warning, TEXT("Total point cloud size: %d"), totalPoints);
 }
 
 uint32 UOusterDepthBufferComponent::GenerateData(uint8 *data, uint32 size, uint32 timestamp)
@@ -407,7 +407,7 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
         // Capture the scene for all sensors at once
         CaptureScene();
         frameIndex = 0;
-        UE_LOG(LogTemp, Warning, TEXT("Capturing scene"));
+        //UE_LOG(LogTemp, Warning, TEXT("Capturing scene"));
         SensorsUpdated = 0;
         captureReady.store(true);
     }
@@ -442,14 +442,14 @@ void UOusterDepthBufferComponent::TickComponent(float DeltaTime, ELevelTick Tick
 
     if (SensorsUpdated >= Sensors.Num() && captureReady.load() && !isProcessing.load())
     {
-        UE_LOG(LogTemp, Warning, TEXT("All sensors updated, processing data"));
+        //UE_LOG(LogTemp, Warning, TEXT("All sensors updated, processing data"));
         captureReady.store(false);
 
         // Track the start time of processing
         auto processStartTime = high_resolution_clock::now();
         isProcessing.store(true); // Set processing flag
         uint32 CurrentBufferIndex = BufferIndex;
-        UE_LOG(LogTemp, Warning, TEXT("Current buffer index: %d"), CurrentBufferIndex);
+        //UE_LOG(LogTemp, Warning, TEXT("Current buffer index: %d"), CurrentBufferIndex);
         SwitchBuffer();
         AsyncTask(ENamedThreads::AnyThread, [this, processStartTime, CurrentBufferIndex]()
                   {
